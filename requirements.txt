@@ -1,33 +1,34 @@
-# REQUIREMENTS.TXT OPTIMIZED UNTUK RAILWAY
-# Hanya library essential untuk production
+# Core ML libraries
+numpy==1.24.3
+pandas==2.0.3
+scikit-learn==1.3.0
+tensorflow==2.13.0
+opencv-python-headless==4.8.0.76
+mediapipe==0.10.3
+Pillow==10.0.0
+joblib==1.3.2
 
-# Core ML libraries (minimal versions)
-numpy>=1.24.0,<2.0.0
-pandas>=2.0.0,<3.0.0
-scikit-learn>=1.3.0,<2.0.0
+# Model export libraries
+onnx==1.14.1
+onnxruntime==1.15.1
+tf2onnx==1.13.0
 
-# TensorFlow CPU only (lebih kecil dari GPU version)
-tensorflow-cpu>=2.13.0,<3.0.0
+# Image processing
+albumentations==1.3.1
 
-# Computer Vision (headless version lebih kecil)
-opencv-python-headless>=4.8.0,<5.0.0
-mediapipe>=0.10.0,<1.0.0
-Pillow>=10.0.0,<11.0.0
+# Utilities
+tqdm==4.66.1
+matplotlib==3.7.2
+seaborn==0.12.2
 
-# Model utilities
-joblib>=1.3.0,<2.0.0
-onnx>=1.14.0,<2.0.0
-onnxruntime>=1.15.0,<2.0.0
+# Flask and production server
+Flask==2.3.3
+Flask-CORS==4.0.0
+gunicorn==21.2.0
 
-# Web framework
-Flask>=2.3.0,<3.0.0
-flask-cors>=4.0.0,<5.0.0
+# Data handling
+pathlib2==2.3.7.post1
 
-# Utilities (minimal)
-tqdm>=4.65.0,<5.0.0
-
-# Remove heavy dependencies yang tidak essential:
-# - tf2onnx (besar dan jarang dipakai di production)
-# - albumentations (besar, pakai transformasi manual)
-# - matplotlib, seaborn (tidak perlu di backend API)
-# - pathlib2 (sudah built-in di Python 3.12)
+# Additional utilities for deployment
+requests==2.31.0
+urllib3==2.0.4
