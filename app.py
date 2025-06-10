@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# app.py - Fixed for Railway deployment
-
 import os
 import sys
 import cv2
@@ -8,9 +5,7 @@ import numpy as np
 import base64
 import logging
 import json
-import mediapipe as mp
-import pickle
-import joblib
+import traceback
 from pathlib import Path
 from datetime import datetime
 import io
@@ -19,57 +14,118 @@ import pandas as pd
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# Railway environment setup
+# Railway environment setup - CRITICAL: Get port from environment
 PORT = int(os.environ.get('PORT', 5000))
 HOST = '0.0.0.0'
 
-if sys.platform.startswith('win'):
-    import codecs
-    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
-    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
-
+# Setup logging for Railway
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.StreamHandler(sys.stderr)
+    ]
 )
 logger = logging.getLogger(__name__)
 
-current_file_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = current_file_dir
+# Log startup info
+logger.info(f"Starting Flask app on {HOST}:{PORT}")
+logger.info(f"Environment PORT: {os.environ.get('PORT', 'Not set')}")
 
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
-try:
-    from src.data_preprocessing.feature_extractor import extract_features
-    extract_features_available = True
-    logger.info("Feature extractor imported successfully")
-except ImportError as e:
-    extract_features_available = False
-    logger.warning(f"Feature extractor not available: {e}")
-
+# Initialize Flask app FIRST
 app = Flask(__name__)
 CORS(app, resources={"*": {"origins": "*"}})
+
+# Basic health check that doesn't depend on heavy imports
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Lightweight health check for Railway"""
+    try:
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'port': PORT,
+            'host': HOST,
+            'python_version': sys.version,
+            'flask_ready': True
+        }), 200
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+# ROOT ENDPOINT for Railway
+@app.route('/', methods=['GET'])
+def root():
+    """Root endpoint for Railway"""
+    return jsonify({
+        'service': 'Sign Language API',
+        'status': 'running',
+        'endpoints': ['/api/health', '/api/translate', '/api/models'],
+        'timestamp': datetime.now().isoformat()
+    })
+
+# Initialize heavy dependencies after Flask setup
+try:
+    logger.info("Loading heavy dependencies...")
+    import mediapipe as mp
+    import pickle
+    import joblib
+    
+    current_file_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = current_file_dir
+
+    if project_root not in sys.path:
+        sys.path.append(project_root)
+
+    # Try to import feature extractor
+    try:
+        from src.data_preprocessing.feature_extractor import extract_features
+        extract_features_available = True
+        logger.info("Feature extractor imported successfully")
+    except ImportError as e:
+        extract_features_available = False
+        logger.warning(f"Feature extractor not available: {e}")
+
+    logger.info("Heavy dependencies loaded successfully")
+    
+except Exception as e:
+    logger.error(f"Failed to load dependencies: {e}")
+    logger.error(traceback.format_exc())
+    # Continue without heavy dependencies for basic health check
 
 class EnhancedSignLanguageAPI:
     def __init__(self):
         self.models = {}
         self.project_root = project_root
+        self.mp_hands = None
+        self.hands = None
         
-        # Enhanced MediaPipe setup for better two-hand detection
-        self.mp_hands = mp.solutions.hands
-        self.hands = self.mp_hands.Hands(
-            static_image_mode=True,
-            max_num_hands=2,  # Ensure 2 hands
-            min_detection_confidence=0.5,  # Lower threshold for better detection
-            min_tracking_confidence=0.4    # Lower threshold for tracking
-        )
+        try:
+            # Enhanced MediaPipe setup for better two-hand detection
+            self.mp_hands = mp.solutions.hands
+            self.hands = self.mp_hands.Hands(
+                static_image_mode=True,
+                max_num_hands=2,  # Ensure 2 hands
+                min_detection_confidence=0.5,  # Lower threshold for better detection
+                min_tracking_confidence=0.4    # Lower threshold for tracking
+            )
+            logger.info("MediaPipe initialized successfully")
+        except Exception as e:
+            logger.error(f"MediaPipe initialization failed: {e}")
         
-        self.load_models()
-        
+        # Load models in background
+        try:
+            self.load_models()
+        except Exception as e:
+            logger.error(f"Model loading failed: {e}")
+            
     def load_models(self):
-        """Load available models"""
+        """Load available models with error handling"""
         logger.info("Loading models...")
         
         model_configs = [
@@ -90,36 +146,40 @@ class EnhancedSignLanguageAPI:
         ]
         
         for config in model_configs:
-            model_info = {'available_models': []}
-            
-            # Load sklearn model (prefer this for stability)
-            if os.path.exists(config['sklearn_path']):
-                try:
-                    sklearn_data = joblib.load(config['sklearn_path'])
-                    if self.validate_sklearn_model(sklearn_data, config['name']):
-                        model_info['sklearn_model'] = sklearn_data
-                        model_info['available_models'].append('sklearn')
-                        logger.info(f"  {config['name']}: Scikit-learn model loaded")
-                except Exception as e:
-                    logger.warning(f"  {config['name']}: Scikit-learn load failed - {e}")
-            
-            # Load TensorFlow model
-            if os.path.exists(config['tensorflow_path']) and os.path.exists(config['tensorflow_meta_path']):
-                try:
-                    import tensorflow as tf
-                    tf_model = tf.keras.models.load_model(config['tensorflow_path'])
-                    tf_meta = joblib.load(config['tensorflow_meta_path'])
+            try:
+                model_info = {'available_models': []}
+                
+                # Load sklearn model (prefer this for stability)
+                if os.path.exists(config['sklearn_path']):
+                    try:
+                        sklearn_data = joblib.load(config['sklearn_path'])
+                        if self.validate_sklearn_model(sklearn_data, config['name']):
+                            model_info['sklearn_model'] = sklearn_data
+                            model_info['available_models'].append('sklearn')
+                            logger.info(f"  {config['name']}: Scikit-learn model loaded")
+                    except Exception as e:
+                        logger.warning(f"  {config['name']}: Scikit-learn load failed - {e}")
+                
+                # Load TensorFlow model
+                if os.path.exists(config['tensorflow_path']) and os.path.exists(config['tensorflow_meta_path']):
+                    try:
+                        import tensorflow as tf
+                        tf_model = tf.keras.models.load_model(config['tensorflow_path'])
+                        tf_meta = joblib.load(config['tensorflow_meta_path'])
+                        
+                        if self.validate_tensorflow_model(tf_model, tf_meta, config['name']):
+                            model_info['tensorflow_model'] = tf_model
+                            model_info['tensorflow_meta'] = tf_meta
+                            model_info['available_models'].append('tensorflow')
+                            logger.info(f"  {config['name']}: TensorFlow model loaded")
+                    except Exception as e:
+                        logger.warning(f"  {config['name']}: TensorFlow load failed - {e}")
+                
+                if model_info['available_models']:
+                    self.models[config['name']] = model_info
                     
-                    if self.validate_tensorflow_model(tf_model, tf_meta, config['name']):
-                        model_info['tensorflow_model'] = tf_model
-                        model_info['tensorflow_meta'] = tf_meta
-                        model_info['available_models'].append('tensorflow')
-                        logger.info(f"  {config['name']}: TensorFlow model loaded")
-                except Exception as e:
-                    logger.warning(f"  {config['name']}: TensorFlow load failed - {e}")
-            
-            if model_info['available_models']:
-                self.models[config['name']] = model_info
+            except Exception as e:
+                logger.error(f"Failed to load {config['name']}: {e}")
         
         logger.info(f"Loaded {len(self.models)} language models: {list(self.models.keys())}")
     
@@ -184,6 +244,10 @@ class EnhancedSignLanguageAPI:
     
     def extract_landmarks_from_frame(self, image, mirror_mode=None):
         """Enhanced landmark extraction with better two-hand support"""
+        if not self.hands:
+            logger.error("MediaPipe not initialized")
+            return None
+            
         try:
             processed_image = self.preprocess_image_for_detection(image)
             image_rgb = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
@@ -222,13 +286,10 @@ class EnhancedSignLanguageAPI:
                 })
             
             num_hands = len(hand_data)
-            # Fixed the f-string syntax error by creating the hand info separately
             hand_info = [(h['adjusted_label'], f"{h['score']:.2f}") for h in hand_data]
             logger.info(f"Detected {num_hands} hands: {hand_info}")
             
             # Enhanced hand sorting for consistency
-            # For BISINDO (two-hand): sort by position (left to right)
-            # For SIBI (one-hand): sort by confidence
             if num_hands >= 2:
                 # Two-hand mode: sort by x position (left hand first)
                 hand_data.sort(key=lambda x: x['wrist_x'])
@@ -510,46 +571,53 @@ class EnhancedSignLanguageAPI:
             logger.error(f"Prediction error: {e}")
             return None, 0.0, f"Prediction error: {str(e)}"
 
-# Initialize API
-api = EnhancedSignLanguageAPI()
+# Initialize API with error handling
+try:
+    api = EnhancedSignLanguageAPI()
+    logger.info("API initialized successfully")
+except Exception as e:
+    logger.error(f"API initialization failed: {e}")
+    logger.error(traceback.format_exc())
+    # Create a minimal API for health checks
+    api = None
 
-# RAILWAY HEALTH CHECK ENDPOINT (Simple and robust)
+# Enhanced health check with model status
 @app.route('/api/health', methods=['GET'])
-def health_check():
-    """Simple health check for Railway"""
+def enhanced_health_check():
+    """Enhanced health check for Railway"""
     try:
-        return jsonify({
+        health_data = {
             'status': 'healthy',
             'timestamp': datetime.now().isoformat(),
-            'models_loaded': list(api.models.keys()),
-            'total_models': len(api.models),
-            'mediapipe_ready': api.mp_hands is not None,
             'port': PORT,
-            'host': HOST
-        }), 200
+            'host': HOST,
+            'python_version': sys.version,
+            'flask_ready': True,
+            'api_initialized': api is not None,
+            'models_loaded': list(api.models.keys()) if api else [],
+            'total_models': len(api.models) if api else 0,
+            'mediapipe_ready': (api.mp_hands is not None) if api else False
+        }
+        
+        return jsonify(health_data), 200
+        
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return jsonify({
-            'status': 'unhealthy',
+            'status': 'error',
             'error': str(e),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'port': PORT,
+            'host': HOST
         }), 500
-
-# ROOT ENDPOINT for Railway
-@app.route('/', methods=['GET'])
-def root():
-    """Root endpoint for Railway"""
-    return jsonify({
-        'service': 'Sign Language API',
-        'status': 'running',
-        'endpoints': ['/api/health', '/api/translate', '/api/models'],
-        'timestamp': datetime.now().isoformat()
-    })
 
 @app.route('/api/translate', methods=['POST'])
 def translate_sign():
     try:
         logger.info("Enhanced translate endpoint called")
+        
+        if not api:
+            return jsonify({'success': False, 'error': 'API not initialized'}), 500
         
         data = request.get_json()
         if not data or 'image' not in data:
@@ -597,48 +665,72 @@ def translate_sign():
         
     except Exception as e:
         logger.error(f"Endpoint error: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/models', methods=['GET'])
 def get_models():
-    return jsonify({
-        'available_models': list(api.models.keys()),
-        'total_models': len(api.models),
-        'hand_detection': 'enhanced_two_hand_support'
-    })
+    try:
+        if not api:
+            return jsonify({
+                'available_models': [],
+                'total_models': 0,
+                'hand_detection': 'api_not_initialized'
+            })
+            
+        return jsonify({
+            'available_models': list(api.models.keys()),
+            'total_models': len(api.models),
+            'hand_detection': 'enhanced_two_hand_support'
+        })
+    except Exception as e:
+        logger.error(f"Models endpoint error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Error handlers
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
     print("\nENHANCED TWO-HAND SIGN LANGUAGE API")
     print("=" * 50)
     print(f"Project root: {project_root}")
-    print(f"Models loaded: {list(api.models.keys())}")
-    print(f"Total models: {len(api.models)}")
-    print(f"MediaPipe ready: {api.mp_hands is not None}")
     print(f"Host: {HOST}")
     print(f"Port: {PORT}")
-    print("ENHANCEMENTS:")
-    print("  ✓ Enhanced two-hand detection for BISINDO")
-    print("  ✓ Better preprocessing and CLAHE")
-    print("  ✓ Mirror-aware handedness processing")
-    print("  ✓ Improved hand sorting algorithms")
-    print("  ✓ Sklearn + TensorFlow model support")
-    print("  ✓ Railway optimized health checks")
+    print(f"Environment PORT: {os.environ.get('PORT', 'Not set')}")
     
-    if not api.models:
-        print("\nNO MODELS LOADED!")
-        print("Run: python main.py")
-    else:
-        print("\nAPI READY FOR TWO-HAND PREDICTIONS!")
-        for lang, info in api.models.items():
-            available_types = ', '.join(info['available_models'])
-            print(f"   {lang}: {available_types}")
-    
-    print("=" * 50)
-    
-    try:
-        # Railway optimized server start
-        app.run(host=HOST, port=PORT, debug=False, threaded=True)
-    except Exception as e:
-        print(f"Server error: {e}")
-        # Fallback untuk development
-        app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
+    if api:
+        print(f"Models loaded: {list(api.models.keys())}")
+        print(f"Total models: {len(api.models)}")
+        print(f"MediaPipe ready: {api.mp_hands is not None}")
+        print("ENHANCEMENTS:")
+        print("  ✓ Enhanced two-hand detection for BISINDO")
+        print("  ✓ Better preprocessing and CLAHE")
+        print("  ✓ Mirror-aware handedness processing")
+        print("  ✓ Improved hand sorting algorithms")
+        print("  ✓ Sklearn + TensorFlow model support")
+        print("  ✓ Railway optimized health checks")
+        
+        if not api.models:
+            print("\nNO MODELS LOADED!")
+            print("Run: python main.py")
+        else:
+            print("\nAPI READY FOR TWO-HAND PREDICTIONS!")
+            for lang, info in api.models.items():
+                available_types = ', '.join(info['available_models'])
+                print(f"   {lang}: {available_types}")
+        
+        print("=" * 50)
+        
+        try:
+            # Railway optimized server start
+            app.run(host=HOST, port=PORT, debug=False, threaded=True)
+        except Exception as e:
+            print(f"Server error: {e}")
+            # Fallback untuk development
+            app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
