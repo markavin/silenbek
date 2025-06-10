@@ -26,8 +26,16 @@ RUN pip install --no-cache-dir -r requirements.txt && pip cache purge
 # Copy app
 COPY app.py .
 
-# Create dummy directories
-RUN mkdir -p data/models src/data_preprocessing
+# --- PENTING: Tambahkan ini untuk menyalin folder model Anda ---
+# Pastikan folder 'data/models' ada di root proyek backend lokal Anda
+# dan berisi file model Anda (mis. your_model_file.h5)
+COPY data/models/ data/models/
+# Jika file model Anda langsung di root backend (tidak disarankan):
+# COPY your_model_file.h5 data/models/
+# Atau jika Anda memiliki struktur yang lebih kompleks, sesuaikan path ini.
+
+# Buat dummy directories (opsional, karena model sudah disalin)
+# RUN mkdir -p data/models src/data_preprocessing # Ini tidak perlu lagi membuat data/models jika sudah dicopy
 
 # Expose port
 EXPOSE $PORT
