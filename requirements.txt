@@ -1,0 +1,29 @@
+# Core ML libraries
+numpy
+pandas
+scikit-learn
+tensorflow
+opencv-python-headless
+mediapipe
+Pillow
+joblib
+
+# Model export libraries
+onnx
+onnxruntime
+tf2onnx # Hapus batasan jika ada
+# sklearn2onnx # Pastikan ini masih dikomentari atau dihapus jika tidak diperlukan
+
+# Image processing
+albumentations
+
+# Utilities
+tqdm
+matplotlib
+seaborn
+
+# Flask
+Flask
+
+# Data handling
+pathlib2
