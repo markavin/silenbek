@@ -1,4 +1,3 @@
-# railway.json
 {
   "build": {
     "builder": "dockerfile"
@@ -11,25 +10,3 @@
   }
 }
 
-# .railwayignore
-node_modules/
-.git/
-.gitignore
-README.md
-.DS_Store
-*.log
-.pytest_cache/
-__pycache__/
-*.pyc
-.env.local
-.env.development
-.vscode/
-.idea/
-*.md
-docs/
-tests/
-.coverage
-htmlcov/
-dist/
-build/
-*.egg-info/
