@@ -1,84 +1,66 @@
 # =========================================================
-# DOCKERFILE OPTIMIZED UNTUK RAILWAY (TARGET: <4GB)
-# Python 3.12, Debian-based (slim) dengan optimasi ukuran
+# DOCKERFILE UNTUK APLIKASI PYTHON DENGAN DEPENDENSI ML
+# Python 3.11 (lebih stabil untuk deployment)
 # =========================================================
 
-FROM python:3.12-slim
+FROM python:3.11-slim
 
-# Set environment variables untuk mengurangi ukuran
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PORT=5000
 
-# Install dependensi sistem minimal (hanya yang benar-benar diperlukan)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Build tools (akan dihapus nanti)
     build-essential \
     pkg-config \
-    cmake \
-    git \
-    # Library untuk OpenCV dan ML (minimal)
-    libjpeg62-turbo-dev \
+    libjpeg-dev \
+    zlib1g-dev \
     libpng-dev \
     libavcodec-dev \
     libavformat-dev \
     libswscale-dev \
+    libtbb-dev \
     libv4l-dev \
+    libgtk2.0-dev \
     libatlas-base-dev \
-    # Python development
+    gfortran \
     python3-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# Upgrade pip, setuptools, wheel
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# Set working directory
-WORKDIR /app
-
-# Copy requirements first untuk layer caching
-COPY requirements.txt .
-
-# Install Python dependencies dengan optimasi
-RUN pip install --no-cache-dir -r requirements.txt \
-    # Hapus cache dan temporary files
-    && pip cache purge \
-    && find /usr/local/lib/python3.12 -name "*.pyc" -delete \
-    && find /usr/local/lib/python3.12 -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-
-# Remove build dependencies untuk menghemat space
-RUN apt-get purge -y --auto-remove \
-    build-essential \
-    pkg-config \
-    cmake \
     git \
-    python3-dev \
-    && apt-get clean \
+    cmake \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libgstreamer1.0-0 \
+    libgstreamer-plugins-base1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy aplikasi
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Set work directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
 COPY . .
 
-# Remove unnecessary files
-RUN find . -name "*.pyc" -delete \
-    && find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true \
-    && find . -name "*.pyo" -delete \
-    && find . -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true \
-    && find . -name "*.md" -delete 2>/dev/null || true \
-    && find . -name "*.txt" ! -name "requirements.txt" -delete 2>/dev/null || true
-
-# Create non-root user untuk keamanan
-RUN useradd --create-home --shell /bin/bash app \
-    && chown -R app:app /app
-USER app
-
-# Health check - simplified untuk Railway
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health', timeout=5)" || exit 1
+# Create necessary directories
+RUN mkdir -p data/models src/data_preprocessing
 
 # Expose port
-EXPOSE 5000
+EXPOSE $PORT
 
-# Run aplikasi
-CMD ["python", "app.py"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:$PORT/api/health || exit 1
+
+# Start command - use gunicorn for production
+CMD gunicorn --bind 0.0.0.0:$PORT --timeout 120 --workers 1 --threads 2 app:app
