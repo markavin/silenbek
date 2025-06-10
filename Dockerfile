@@ -19,6 +19,8 @@ RUN apt-get update && \
     libsm6 \
     libxext6 \
     libglib2.0-0 && \
+    libfontconig1 \
+    libxrender1 && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
@@ -40,7 +42,7 @@ COPY data/models/ data/models/
 
 # Menyalin file aplikasi utama (app.py)
 COPY app.py .
-
+RUN ls -R /app
 # Create dummy directories (ini mungkin sudah tidak sepenuhnya diperlukan
 # jika folder data/models dan src/ sudah disalin, tapi tidak ada salahnya)
 RUN mkdir -p data/models src/data_preprocessing
