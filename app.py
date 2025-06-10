@@ -4,15 +4,19 @@ import logging
 import json
 import base64
 import io
+import pickle
+import numpy as np
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from PIL import Image
+import cv2
 
-# Railway environment setup - CRITICAL
+# Railway environment setup
 PORT = int(os.environ.get('PORT', 5000))
 HOST = '0.0.0.0'
 
-# Setup logging untuk Railway
+# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -20,57 +24,220 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-print(f"🚀 STARTING APP ON {HOST}:{PORT}")
-logger.info(f"Starting Flask app on {HOST}:{PORT}")
-logger.info(f"Environment PORT: {os.environ.get('PORT', 'Not set')}")
-logger.info(f"Python version: {sys.version}")
+print(f"🚀 STARTING REAL ML MODEL APP ON {HOST}:{PORT}")
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# Production CORS configuration
-if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('PORT'):
-    # Production - specific origins
-    CORS(app, origins=[
-        "https://silentdicoding.vercel.app",
-        "https://silentdicoding-q93cjrxhx-evans-projects-d43a2e39.vercel.app",
-        "https://silenbek-production.up.railway.app"
-    ])
-    logger.info("🔒 Production CORS enabled for specific origins")
-else:
-    # Development - permissive
-    CORS(app, resources={"*": {"origins": "*"}})
-    logger.info("🔓 Development CORS enabled")
+# CORS configuration
+CORS(app, 
+     resources={"*": {"origins": "*"}},
+     methods=['GET', 'POST', 'OPTIONS'],
+     allow_headers=['Content-Type', 'Authorization', 'User-Agent'])
 
-# Global state
-app_ready = True
+logger.info("🔓 CORS configured")
+
+# Global variables for ML models
+models = {}
+model_loaded = False
+available_models = []
+
+def load_ml_models():
+    """Load actual ML models from files"""
+    global models, model_loaded, available_models
+    
+    try:
+        logger.info("🔍 Searching for ML models...")
+        
+        # Model paths to check (adjust based on your structure)
+        model_paths = {
+            'bisindo': [
+                './models/sign_language_model_bisindo_sklearn.pkl',
+                './data/models/sign_language_model_bisindo_sklearn.pkl',
+                './augmented/bisindo_model.pkl',
+                './processed/bisindo_classifier.pkl'
+            ],
+            'sibi': [
+                './models/sign_language_model_sibi_sklearn.pkl', 
+                './data/models/sign_language_model_sibi_sklearn.pkl',
+                './augmented/sibi_model.pkl',
+                './processed/sibi_classifier.pkl'
+            ]
+        }
+        
+        # Check what files exist
+        logger.info("📁 Checking available files...")
+        for root, dirs, files in os.walk('.'):
+            for file in files:
+                if file.endswith(('.pkl', '.joblib', '.h5', '.pt')):
+                    full_path = os.path.join(root, file)
+                    logger.info(f"📄 Found model file: {full_path}")
+        
+        # Try to load models
+        loaded_count = 0
+        
+        for language, paths in model_paths.items():
+            for path in paths:
+                if os.path.exists(path):
+                    try:
+                        logger.info(f"📂 Loading {language} model from: {path}")
+                        
+                        # Try different loading methods
+                        if path.endswith('.pkl'):
+                            with open(path, 'rb') as f:
+                                model = pickle.load(f)
+                        elif path.endswith('.joblib'):
+                            import joblib
+                            model = joblib.load(path)
+                        else:
+                            logger.warning(f"⚠️ Unsupported model format: {path}")
+                            continue
+                        
+                        models[language] = model
+                        available_models.append(language)
+                        loaded_count += 1
+                        logger.info(f"✅ {language} model loaded successfully!")
+                        break  # Stop after first successful load for this language
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Failed to load {language} model from {path}: {e}")
+                        continue
+        
+        if loaded_count > 0:
+            model_loaded = True
+            logger.info(f"🎉 Successfully loaded {loaded_count} models: {available_models}")
+        else:
+            logger.warning("⚠️ No models loaded - running in demo mode")
+            
+        return model_loaded
+        
+    except Exception as e:
+        logger.error(f"💥 Model loading error: {e}")
+        return False
+
+# Load models on startup
+load_ml_models()
+
+def preprocess_image_for_model(image_data):
+    """
+    Preprocess image for ML model prediction
+    Adjust this based on how your model was trained
+    """
+    try:
+        # Decode base64
+        if isinstance(image_data, str):
+            if ',' in image_data:
+                image_data = image_data.split(',')[1]
+            image_bytes = base64.b64decode(image_data)
+        else:
+            image_bytes = image_data
+        
+        # Load image
+        image = Image.open(io.BytesIO(image_bytes))
+        
+        # Convert to RGB
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # Convert to OpenCV format
+        opencv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        
+        # Resize to model input size (adjust based on your training)
+        # Common sizes: 64x64, 128x128, 224x224
+        target_size = (64, 64)  # Adjust this based on your model training
+        resized = cv2.resize(opencv_image, target_size)
+        
+        # Normalize pixel values (adjust based on your training)
+        normalized = resized.astype(np.float32) / 255.0
+        
+        # Flatten for sklearn models (if needed)
+        # If your model expects flattened input:
+        flattened = normalized.flatten()
+        
+        # If your model expects 2D input (batch_size, features):
+        features = flattened.reshape(1, -1)
+        
+        logger.info(f"✅ Image preprocessed: {features.shape}")
+        return features
+        
+    except Exception as e:
+        logger.error(f"❌ Image preprocessing failed: {e}")
+        raise
+
+def predict_with_real_model(processed_image, language_type='bisindo'):
+    """
+    Make prediction using actual ML model
+    """
+    global models, model_loaded
+    
+    try:
+        if model_loaded and language_type in models:
+            logger.info(f"🤖 Using real {language_type} model for prediction")
+            
+            model = models[language_type]
+            
+            # Make prediction
+            prediction = model.predict(processed_image)[0]
+            
+            # Get confidence if available
+            if hasattr(model, 'predict_proba'):
+                probabilities = model.predict_proba(processed_image)[0]
+                confidence = float(np.max(probabilities))
+            else:
+                # Fallback confidence
+                confidence = 0.85
+            
+            logger.info(f"🎯 Real model prediction: {prediction} (confidence: {confidence:.2f})")
+            return str(prediction), confidence
+            
+        else:
+            # Fallback to demo prediction
+            logger.warning(f"⚠️ No model for {language_type}, using demo prediction")
+            return demo_predict(language_type)
+            
+    except Exception as e:
+        logger.error(f"💥 Real model prediction failed: {e}")
+        # Fallback to demo
+        return demo_predict(language_type)
+
+def demo_predict(language_type='bisindo'):
+    """Fallback demo prediction"""
+    import random
+    
+    if language_type == 'bisindo':
+        signs = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+    else:
+        signs = ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T']
+    
+    prediction = random.choice(signs)
+    confidence = random.uniform(0.60, 0.80)  # Lower confidence for demo
+    
+    return prediction, confidence
 
 @app.before_request
 def log_request_info():
-    logger.info(f"📥 {request.method} {request.path} from {request.remote_addr}")
+    origin = request.headers.get('Origin', 'Unknown')
+    logger.info(f"📥 {request.method} {request.path} from {origin}")
 
-# SIMPLIFIED health check - CRITICAL untuk Railway
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Ultra-simple health check for Railway"""
     try:
-        logger.info("🏥 Health check called")
         response = {
             'status': 'healthy',
             'timestamp': datetime.now().isoformat(),
             'port': PORT,
-            'service': 'Sign Language API - Minimal',
-            'version': '1.0.0'
+            'service': 'Sign Language API',
+            'model_status': {
+                'loaded': model_loaded,
+                'available_models': available_models,
+                'total_models': len(models)
+            }
         }
-        logger.info(f"✅ Health check OK: {response}")
+        logger.info(f"✅ Health check: {response}")
         return jsonify(response), 200
     except Exception as e:
-        logger.error(f"❌ Health check failed: {e}")
-        return jsonify({
-            'status': 'error',
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 200  # Still return 200 for Railway
+        logger.error(f"❌ Health check error: {e}")
+        return jsonify({'status': 'error', 'error': str(e)}), 200
 
 @app.route('/health', methods=['GET'])
 def health_alt():
@@ -78,186 +245,107 @@ def health_alt():
 
 @app.route('/', methods=['GET'])
 def root():
-    """Root endpoint"""
-    try:
-        logger.info("🏠 Root endpoint called")
-        response = {
-            'service': 'Sign Language API',
-            'status': 'running',
-            'message': 'Welcome to Sign Language API - Minimal Version',
-            'endpoints': ['/api/health', '/api/translate'],
-            'timestamp': datetime.now().isoformat()
-        }
-        logger.info(f"✅ Root OK")
-        return jsonify(response), 200
-    except Exception as e:
-        logger.error(f"❌ Root error: {e}")
-        return jsonify({'error': str(e)}), 200
+    return jsonify({
+        'service': 'Sign Language API',
+        'status': 'running',
+        'model_info': {
+            'loaded': model_loaded,
+            'available': available_models
+        },
+        'timestamp': datetime.now().isoformat()
+    }), 200
 
 @app.route('/api/models', methods=['GET'])
 def get_models():
-    """Model status"""
-    try:
-        response = {
-            'available_models': ['demo'],
-            'status': 'demo_mode',
-            'message': 'Running in lightweight demo mode'
-        }
-        return jsonify(response), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 200
-
-# Lightweight image processing (NO OpenCV/NumPy)
-def simple_image_validation(image_data):
-    """Simple image validation without heavy libraries"""
-    try:
-        if isinstance(image_data, str):
-            if ',' in image_data:
-                image_data = image_data.split(',')[1]
-            
-            # Basic base64 validation
-            try:
-                decoded = base64.b64decode(image_data)
-                logger.info(f"✅ Image decoded, size: {len(decoded)} bytes")
-                return True
-            except Exception as e:
-                logger.error(f"❌ Base64 decode failed: {e}")
-                return False
-        return False
-    except Exception as e:
-        logger.error(f"❌ Image validation error: {e}")
-        return False
-
-# Simple prediction (NO ML libraries)
-def simple_predict(language_type='bisindo'):
-    """Simple prediction without ML libraries"""
-    import random
-    
-    # Demo predictions with different probabilities
-    if language_type == 'bisindo':
-        predictions = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
-    else:
-        predictions = ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T']
-    
-    prediction = random.choice(predictions)
-    confidence = random.uniform(0.65, 0.92)
-    
-    return prediction, confidence
+    return jsonify({
+        'status': 'loaded' if model_loaded else 'demo_mode',
+        'available_models': available_models,
+        'total_models': len(models),
+        'models_detail': {model: 'loaded' for model in available_models}
+    }), 200
 
 @app.route('/api/translate', methods=['POST'])
 def translate_sign():
-    """Lightweight translation endpoint"""
     try:
-        logger.info("🔮 Translate endpoint called")
+        logger.info("🔮 Translation requested")
         
-        # Get JSON data
+        # Get data
         data = request.get_json()
-        if not data:
-            logger.error("❌ No JSON data")
-            return jsonify({'success': False, 'error': 'No JSON data received'}), 400
+        if not data or 'image' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'No image data provided'
+            }), 400
         
-        # Check image data
-        if 'image' not in data:
-            logger.error("❌ No image data")
-            return jsonify({'success': False, 'error': 'No image data'}), 400
-        
-        image_data = data['image']
+        image_data = data.get('image', '')
         language_type = data.get('language_type', 'bisindo')
         
-        logger.info(f"📊 Processing: language={language_type}")
+        logger.info(f"🎯 Language: {language_type}")
+        logger.info(f"📸 Image size: {len(image_data)}")
         
-        # Simple validation
-        if not simple_image_validation(image_data):
+        # Validate image
+        if not image_data or len(image_data) < 100:
             return jsonify({
-                'success': False, 
+                'success': False,
                 'error': 'Invalid image data'
             }), 400
         
-        # Simple prediction
-        prediction, confidence = simple_predict(language_type)
+        # Preprocess image
+        try:
+            processed_image = preprocess_image_for_model(image_data)
+        except Exception as e:
+            logger.error(f"❌ Preprocessing failed: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Image preprocessing failed: {str(e)}'
+            }), 400
+        
+        # Make prediction
+        prediction, confidence = predict_with_real_model(processed_image, language_type)
         
         response = {
             'success': True,
             'prediction': prediction,
             'confidence': float(confidence),
             'language_type': language_type,
-            'model_status': 'lightweight_demo',
-            'timestamp': datetime.now().isoformat(),
-            'message': 'Lightweight prediction successful'
+            'model_status': 'real_model' if (model_loaded and language_type in models) else 'demo',
+            'timestamp': datetime.now().isoformat()
         }
         
-        logger.info(f"✅ Prediction: {prediction} ({confidence:.2f})")
+        logger.info(f"✅ Prediction result: {prediction} ({confidence:.2f}) - {response['model_status']}")
         return jsonify(response), 200
         
     except Exception as e:
-        logger.error(f"❌ Translate error: {e}")
+        logger.error(f"💥 Translation error: {e}")
         return jsonify({
-            'success': False, 
+            'success': False,
             'error': f'Server error: {str(e)}'
         }), 500
 
-# Error handlers
+@app.route('/<path:path>', methods=['OPTIONS'])
+def handle_preflight(path=None):
+    return '', 200
+
 @app.errorhandler(404)
 def not_found(error):
-    logger.warning(f"⚠️ 404: {request.path}")
     return jsonify({'error': 'Not found', 'path': request.path}), 404
 
 @app.errorhandler(500)
 def internal_error(error):
-    logger.error(f"💥 500 error: {error}")
     return jsonify({'error': 'Internal server error'}), 500
 
-# Test endpoint
-@app.route('/test', methods=['GET'])
-def test():
-    """Test endpoint"""
-    logger.info("🧪 Test endpoint called")
-    return jsonify({
-        'message': 'Test successful',
-        'timestamp': datetime.now().isoformat(),
-        'port': PORT,
-        'host': HOST,
-        'ready': app_ready
-    }), 200
-
-# Startup verification
-def verify_startup():
-    """Verify app can start"""
-    try:
-        logger.info("🔍 Verifying startup...")
-        logger.info(f"✅ Flask app created")
-        logger.info(f"✅ CORS configured")
-        logger.info(f"✅ Routes registered")
-        logger.info(f"✅ Ready to serve on {HOST}:{PORT}")
-        return True
-    except Exception as e:
-        logger.error(f"❌ Startup verification failed: {e}")
-        return False
-
 if __name__ == '__main__':
-    print("\n" + "="*60)
-    print("🚀 SIGN LANGUAGE API - LIGHTWEIGHT VERSION")
-    print("="*60)
+    print("\n" + "="*50)
+    print("🤖 SIGN LANGUAGE API - REAL ML MODEL")
+    print("="*50)
     print(f"Host: {HOST}")
     print(f"Port: {PORT}")
-    print(f"Environment: Railway")
-    print(f"Mode: Lightweight Demo")
-    print("="*60)
-    
-    # Verify startup
-    if not verify_startup():
-        logger.error("❌ Startup verification failed!")
-        sys.exit(1)
+    print(f"Models loaded: {len(models)}")
+    print(f"Available: {available_models}")
+    print("="*50)
     
     try:
-        logger.info("🚀 Starting Flask server...")
-        app.run(
-            host=HOST, 
-            port=PORT, 
-            debug=False,
-            threaded=True,
-            use_reloader=False
-        )
+        app.run(host=HOST, port=PORT, debug=False, threaded=True, use_reloader=False)
     except Exception as e:
-        logger.error(f"💥 Failed to start server: {e}")
+        logger.error(f"💥 Server start failed: {e}")
         sys.exit(1)
