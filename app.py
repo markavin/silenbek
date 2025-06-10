@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__) # __name_ yang benar
 
 # Determine project root dynamically for Docker consistency
 # In Docker, WORKDIR /app means this script is at /app/app.py
-current_file_dir = os.path.dirname(os.path.abspath(_file)) # __file_ yang benar
+current_file_dir = os.path.dirname(os.path.abspath(__file__)) # __file_ yang benar
 project_root = current_file_dir
 
 # Add project root to sys.path if not already there
