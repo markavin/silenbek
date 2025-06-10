@@ -1,11 +1,15 @@
-# .dockerignore - Exclude files untuk mengurangi build context
+# .dockerignore - Exclude EVERYTHING unnecessary
 
 # Git dan version control
 .git
 .gitignore
 .gitattributes
+*.md
+README*
+docs/
+documentation/
 
-# Python
+# Python cache dan temporary
 __pycache__/
 *.pyc
 *.pyo
@@ -15,12 +19,16 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+*.egg-info/
+build/
+dist/
 
 # Virtual environments
 venv/
 env/
 ENV/
 .venv/
+.env/
 
 # IDE dan editor
 .vscode/
@@ -28,8 +36,6 @@ ENV/
 *.swp
 *.swo
 *~
-
-# OS generated files
 .DS_Store
 .DS_Store?
 ._*
@@ -38,48 +44,47 @@ ENV/
 ehthumbs.db
 Thumbs.db
 
-# Documentation
-*.md
-README*
-docs/
-documentation/
-
-# Development files
-tests/
-test_*
-*_test.py
-.pytest_cache/
-
 # Logs
 *.log
 logs/
 
-# Large data files (jika ada)
-*.h5
-*.pkl
-*.joblib
+# Data files (SANGAT PENTING - ini yang bikin besar!)
 data/raw/
+data/augmented/
 data/processed/
-models/backup/
+data/backup/
+
+# Model training artifacts (EXCLUDE semua kecuali final models)
+model_training_logs/
+tensorboard_logs/
+checkpoints/
+*.ipynb
+.ipynb_checkpoints/
+
+# Large model files (hanya include yang essential)
+*.h5
+# *.pkl  # Kita butuh sklearn .pkl files
+*.joblib
+*.onnx
 
 # Temporary files
 tmp/
 temp/
 *.tmp
 
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# Railway dan deployment
+# Railway dan deployment files
 .railway/
 railway.json
 
 # Environment files
-.env
-.env.*
+.env*
 
-# Jupyter notebooks
-*.ipynb
-.ipynb_checkpoints/
+# Testing
+tests/
+test_*
+*_test.py
+
+# Documentation dan examples
+examples/
+samples/
+demo/
