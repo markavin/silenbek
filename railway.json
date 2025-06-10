@@ -1,14 +1,35 @@
+# railway.json
 {
-  "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile"
+    "builder": "dockerfile"
   },
   "deploy": {
-    "numReplicas": 1,
-    "restartPolicyType": "ON_FAILURE",
     "healthcheckPath": "/api/health",
-    "healthcheckTimeout": 100,
-    "startCommand": "python app.py"
+    "healthcheckTimeoutSeconds": 300,
+    "restartPolicyType": "on_failure",
+    "restartPolicyMaxRetries": 3
   }
 }
+
+# .railwayignore
+node_modules/
+.git/
+.gitignore
+README.md
+.DS_Store
+*.log
+.pytest_cache/
+__pycache__/
+*.pyc
+.env.local
+.env.development
+.vscode/
+.idea/
+*.md
+docs/
+tests/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
