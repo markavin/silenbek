@@ -18,9 +18,9 @@ RUN apt-get update && \
     libgl1-mesa-glx \
     libsm6 \
     libxext6 \
-    libglib2.0-0 && \
-    libfontconfig1 \
-    libxrender1 && \
+    libglib2.0-0 \
+    libfontconfig1 \  # <-- Hapus '&& \' dari baris sebelumnya
+    libxrender1 && \  # <-- Hapus '&& \' dari baris sebelumnya jika ada
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
@@ -42,7 +42,10 @@ COPY data/models/ data/models/
 
 # Menyalin file aplikasi utama (app.py)
 COPY app.py .
-RUN ls -R /app
+
+# Tambahkan baris ini untuk debugging struktur file:
+RUN ls -R /app 
+
 # Create dummy directories (ini mungkin sudah tidak sepenuhnya diperlukan
 # jika folder data/models dan src/ sudah disalin, tapi tidak ada salahnya)
 RUN mkdir -p data/models src/data_preprocessing
