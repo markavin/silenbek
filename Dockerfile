@@ -19,7 +19,7 @@ RUN apt-get update && \
     libsm6 \
     libxext6 \
     libglib2.0-0 && \
-    libfontconig1 \
+    libfontconfig1 \
     libxrender1 && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
