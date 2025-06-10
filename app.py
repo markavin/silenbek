@@ -29,7 +29,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler(sys.stdout)]
 )
-logger = logging.getLogger(_name) # __name_ yang benar
+logger = logging.getLogger(__name__) # __name_ yang benar
 
 # Determine project root dynamically for Docker consistency
 # In Docker, WORKDIR /app means this script is at /app/app.py
@@ -52,7 +52,7 @@ except ImportError as e:
     extract_features_available = False
     logger.error(f"❌ Feature extractor not available: {e}. Please ensure src/data_preprocessing/feature_extractor.py is present.")
 
-app = Flask(_name) # __name_ yang benar
+app = Flask(__name__) # __name_ yang benar
 
 # CORS configuration
 # --- PENTING: Untuk production, ganti "*" dengan URL frontend Vercel Anda ---
