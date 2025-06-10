@@ -17,6 +17,7 @@ import io
 from PIL import Image # For image decoding
 import pandas as pd # For DataFrame operations
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 
 # Fix for Windows console output (if running locally on Windows)
