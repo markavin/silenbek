@@ -5,17 +5,7 @@
   "deploy": {
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 300,
-    "startCommand": "gunicorn --bind 0.0.0.0:$PORT --timeout 120 --workers 1 --threads 4 app:app",
     "restartPolicyType": "on_failure",
     "restartPolicyMaxRetries": 3
-  },
-  "environments": {
-    "production": {
-      "variables": {
-        "FLASK_ENV": "production",
-        "PYTHONUNBUFFERED": "1",
-        "PORT": "5000"
-      }
-    }
   }
 }
