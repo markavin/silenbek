@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# app.py - Enhanced for Two-Hand Detection
+# app.py - Fixed for Railway deployment
 
 import os
 import sys
@@ -18,6 +18,10 @@ from PIL import Image
 import pandas as pd
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+
+# Railway environment setup
+PORT = int(os.environ.get('PORT', 5000))
+HOST = '0.0.0.0'
 
 if sys.platform.startswith('win'):
     import codecs
@@ -509,21 +513,37 @@ class EnhancedSignLanguageAPI:
 # Initialize API
 api = EnhancedSignLanguageAPI()
 
+# RAILWAY HEALTH CHECK ENDPOINT (Simple and robust)
 @app.route('/api/health', methods=['GET'])
 def health_check():
+    """Simple health check for Railway"""
+    try:
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'models_loaded': list(api.models.keys()),
+            'total_models': len(api.models),
+            'mediapipe_ready': api.mp_hands is not None,
+            'port': PORT,
+            'host': HOST
+        }), 200
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+# ROOT ENDPOINT for Railway
+@app.route('/', methods=['GET'])
+def root():
+    """Root endpoint for Railway"""
     return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
-        'models_loaded': list(api.models.keys()),
-        'total_models': len(api.models),
-        'mediapipe_ready': api.mp_hands is not None,
-        'hand_detection': 'enhanced_two_hand_support',
-        'features': [
-            'mirror_mode_support',
-            'enhanced_two_hand_detection',
-            'improved_preprocessing',
-            'sklearn_tensorflow_support'
-        ]
+        'service': 'Sign Language API',
+        'status': 'running',
+        'endpoints': ['/api/health', '/api/translate', '/api/models'],
+        'timestamp': datetime.now().isoformat()
     })
 
 @app.route('/api/translate', methods=['POST'])
@@ -594,12 +614,15 @@ if __name__ == '__main__':
     print(f"Models loaded: {list(api.models.keys())}")
     print(f"Total models: {len(api.models)}")
     print(f"MediaPipe ready: {api.mp_hands is not None}")
+    print(f"Host: {HOST}")
+    print(f"Port: {PORT}")
     print("ENHANCEMENTS:")
     print("  ✓ Enhanced two-hand detection for BISINDO")
     print("  ✓ Better preprocessing and CLAHE")
     print("  ✓ Mirror-aware handedness processing")
     print("  ✓ Improved hand sorting algorithms")
     print("  ✓ Sklearn + TensorFlow model support")
+    print("  ✓ Railway optimized health checks")
     
     if not api.models:
         print("\nNO MODELS LOADED!")
@@ -611,10 +634,11 @@ if __name__ == '__main__':
             print(f"   {lang}: {available_types}")
     
     print("=" * 50)
-    print("Test with: python camera_test.py")
     
     try:
-        app.run(host='0.0.0.0', port=5000, debug=False)
+        # Railway optimized server start
+        app.run(host=HOST, port=PORT, debug=False, threaded=True)
     except Exception as e:
         print(f"Server error: {e}")
+        # Fallback untuk development
         app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
