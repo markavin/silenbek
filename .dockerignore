@@ -1,3 +1,85 @@
+# .dockerignore - Exclude files untuk mengurangi build context
+
+# Git dan version control
+.git
+.gitignore
+.gitattributes
+
+# Python
 __pycache__/
-.git/
-  node_modules/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDE dan editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Documentation
+*.md
+README*
+docs/
+documentation/
+
+# Development files
+tests/
+test_*
+*_test.py
+.pytest_cache/
+
+# Logs
+*.log
+logs/
+
+# Large data files (jika ada)
+*.h5
+*.pkl
+*.joblib
+data/raw/
+data/processed/
+models/backup/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Railway dan deployment
+.railway/
+railway.json
+
+# Environment files
+.env
+.env.*
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
