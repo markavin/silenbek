@@ -18,7 +18,7 @@ RUN apt-get update && \
     libgl1-mesa-glx \
     libsm6 \
     libxext6 \
-    libglib2.0-0 && \  # <--- Tambahkan baris ini
+    libglib2.0-0 && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
