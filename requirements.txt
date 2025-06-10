@@ -23,11 +23,13 @@ matplotlib
 seaborn
 
 # Flask
-Flask
-Flask-CORS
-gunicorn
+Flask==2.3.3
+Flask-CORS==4.0.0
+gunicorn==21.2.0
 
 # Data handling
 pathlib2
 
 tensorflow-cpu==2.13.0
+
+requests==2.31.0
