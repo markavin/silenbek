@@ -19,8 +19,8 @@ RUN apt-get update && \
     libsm6 \
     libxext6 \
     libglib2.0-0 \
-    libfontconfig1 \  # <-- Hapus '&& \' dari baris sebelumnya
-    libxrender1 && \  # <-- Hapus '&& \' dari baris sebelumnya jika ada
+    libfontconfig1 \  
+    libxrender1 \  
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
