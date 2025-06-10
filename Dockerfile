@@ -11,12 +11,14 @@ ENV FLASK_ENV=production
 # Install system dependencies yang diperlukan oleh OpenCV (cv2)
 # libgl1-mesa-glx menyediakan libGL.so.1
 # libsm6 dan libxext6 juga sering dibutuhkan oleh OpenCV di lingkungan headless
+# libglib2.0-0 menyediakan libgthread-2.0.so.0
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     curl \
     libgl1-mesa-glx \
     libsm6 \
-    libxext6 && \
+    libxext6 \
+    libglib2.0-0 && \  # <--- Tambahkan baris ini
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
@@ -27,16 +29,13 @@ WORKDIR /app
 RUN pip install --no-cache-dir --upgrade pip
 
 # Copy requirements and install Python dependencies
-# Ini harus dilakukan SEBELUM menyalin kode aplikasi untuk memanfaatkan Docker cache layer
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && pip cache purge
 
 # Menyalin folder src (termasuk feature_extractor.py jika ada)
-# Asumsi struktur: project_root/src/...
 COPY src/ src/
 
 # Menyalin folder models yang berisi file model (.pkl, .h5, .joblib)
-# Asumsi struktur: project_root/data/models/...
 COPY data/models/ data/models/
 
 # Menyalin file aplikasi utama (app.py)
@@ -53,5 +52,5 @@ EXPOSE $PORT
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:$PORT/api/health || exit 1
 
-# Start command
-CMD python3 app.py # Gunakan python3 secara eksplisit
+# Start command - gunakan shell form
+CMD python3 app.py
