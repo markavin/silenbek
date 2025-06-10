@@ -20,7 +20,7 @@ RUN apt-get update && \
     libxext6 \
     libglib2.0-0 \
     libfontconfig1 \  
-    libxrender1 \  
+    libxrender1 && \  
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
