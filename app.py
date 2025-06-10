@@ -24,7 +24,11 @@ logger.info(f"Environment PORT: {os.environ.get('PORT', 'Not set')}")
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app, origins=["https://silentdeploy.vercel.app"])
+CORS(app, origins=[
+    "https://silent-prgp.vercel.app",
+    "https://silent-signl-git-main-mark-alvins-projects-95223802.vercel.app",
+    "https://silent-signl-ni7gx410z-mark-alvins-projects-95223802.vercel.app"
+])
 
 # Global variable for ML API
 api = None
