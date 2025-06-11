@@ -832,7 +832,7 @@ def get_models_endpoint(): # Renamed to avoid confusion with class method
     })
 
 # Main execution block
-if _name_ == '_main_':
+if __name__ == '__main__':
     print("\nENHANCED TWO-HAND SIGN LANGUAGE API")
     print("=" * 50)
     print(f"Project root: {project_root}")
