@@ -375,7 +375,7 @@ class EnhancedSignLanguageAPI:
             return np.array(landmarks_flat, dtype=np.float32) # Convert to numpy array
             
         except Exception as e:
-            logger.error(f"❌ Landmark extraction error: {e}")
+            logger.error(f"Landmark extraction error: {e}")
             return None # Return None if extraction totally fails
     
     def extract_features_using_pipeline(self, landmarks_data_np, language):
@@ -408,14 +408,14 @@ class EnhancedSignLanguageAPI:
                     # Drop target columns if they exist, to prepare for prediction
                     features_for_prediction = features_df.drop(columns=['label', 'sign_language_type'], errors='ignore')
                     
-                    logger.info(f"✅ Features extracted using pipeline: {features_for_prediction.shape}")
+                    logger.info(f"Features extracted using pipeline: {features_for_prediction.shape}")
                     return features_for_prediction
             
             logger.warning("Feature extractor pipeline not available or landmarks data is None. Using fallback features.")
             return self.create_fallback_features(landmarks_data_np, language)
             
         except Exception as e:
-            logger.error(f"❌ Feature extraction using pipeline failed: {e}")
+            logger.error(f"Feature extraction using pipeline failed: {e}")
             logger.warning("Using fallback features due to pipeline failure.")
             return self.create_fallback_features(landmarks_data_np, language)
     
@@ -521,11 +521,11 @@ class EnhancedSignLanguageAPI:
                 features[f'feature_{feature_idx}'] = 0.0
                 feature_idx += 1
 
-            logger.info(f"✅ Fallback features created: {len(features)} values.")
+            logger.info(f"Fallback features created: {len(features)} values.")
             return pd.DataFrame([features])
             
         except Exception as e:
-            logger.error(f"❌ Fallback feature creation failed: {e}")
+            logger.error(f"Fallback feature creation failed: {e}")
             # Ensure a DataFrame is always returned, even if empty or filled with zeros.
             basic_features = {f'feature_{i}': 0.0 for i in range(80)} # Create a default DataFrame
             return pd.DataFrame([basic_features])
@@ -757,7 +757,7 @@ class EnhancedSignLanguageAPI:
             logger.info(f"🎲 Falling back to intelligent demo for {language_type}: {prediction}")
             return prediction
         except Exception as e:
-            logger.error(f"❌ Critical error in demo fallback: {e}")
+            logger.error(f"Critical error in demo fallback: {e}")
             return random.choice(['DEMO', 'SIGN']) # Absolute fallback
             
 
@@ -884,6 +884,17 @@ def list_models():
             "status": "error",
             "message": "Model registry not found."
         }), 500
+
+@app.route("/")
+def index():
+    return jsonify({
+        "message": "Sign Language API is running ",
+        "available_endpoints": [
+            "/predict",
+            "/models",
+            "/health"
+        ]
+    })
 
 
 # Main execution block
