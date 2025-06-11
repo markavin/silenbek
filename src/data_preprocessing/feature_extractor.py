@@ -1,4 +1,137 @@
-# src/data_preprocessing/feature_extractor.py
+def create_standardized_features(landmarks_data):
+    """Create standardized features with EXACT consistent naming for training/inference"""
+    try:
+        features = {}
+        
+        # Split into 2 hands (21 landmarks * 3 coords = 63 values per hand)
+        hand1_data = landmarks_data[:63]
+        hand2_data = landmarks_data[63:]
+        
+        # Process each hand with EXACT consistent feature naming
+        for hand_idx, hand_data in enumerate([hand1_data, hand2_data]):
+            hand_prefix = f'hand_{hand_idx}'
+            
+            if len(hand_data) >= 63:
+                x_coords = hand_data[::3]   # x coordinates
+                y_coords = hand_data[1::3]  # y coordinates
+                z_coords = hand_data[2::3]  # z coordinates
+                
+                # Check if hand exists (not all zeros)
+                hand_exists = not all(x == 0 and y == 0 and z == 0 for x, y, z in zip(x_coords, y_coords, z_coords))
+                
+                if hand_exists:
+                    # SECTION 1: Basic statistics (12 features per hand) - EXACT naming
+                    x_stats = [np.mean(x_coords), np.std(x_coords), np.min(x_coords), np.max(x_coords)]
+                    y_stats = [np.mean(y_coords), np.std(y_coords), np.min(y_coords), np.max(y_coords)]
+                    z_stats = [np.mean(z_coords), np.std(z_coords), np.min(z_coords), np.max(z_coords)]
+                    
+                    all_stats = x_stats + y_stats + z_stats
+                    
+                    for i, stat in enumerate(all_stats):
+                        features[f'{hand_prefix}_stat_{i:02d}'] = float(stat) if np.isfinite(stat) else 0.0
+                    
+                    # SECTION 2: Fingertip distances from wrist (5 features per hand) - EXACT naming
+                    wrist_x, wrist_y, wrist_z = x_coords[0], y_coords[0], z_coords[0]
+                    fingertip_indices = [4, 8, 12, 16, 20]  # thumb, index, middle, ring, pinky
+                    
+                    for i, tip_idx in enumerate(fingertip_indices):
+                        if tip_idx < len(x_coords):
+                            dist = np.sqrt((x_coords[tip_idx] - wrist_x)**2 + 
+                                         (y_coords[tip_idx] - wrist_y)**2 + 
+                                         (z_coords[tip_idx] - wrist_z)**2)
+                            features[f'{hand_prefix}_tip_dist_{i:02d}'] = float(dist) if np.isfinite(dist) else 0.0
+                        else:
+                            features[f'{hand_prefix}_tip_dist_{i:02d}'] = 0.0
+                    
+                    # SECTION 3: Hand geometry (4 features per hand) - EXACT naming
+                    width = max(x_coords) - min(x_coords)
+                    height = max(y_coords) - min(y_coords)
+                    depth = max(z_coords) - min(z_coords)
+                    aspect_ratio = width / (height + 1e-8)
+                    
+                    features[f'{hand_prefix}_width'] = float(width) if np.isfinite(width) else 0.0
+                    features[f'{hand_prefix}_height'] = float(height) if np.isfinite(height) else 0.0
+                    features[f'{hand_prefix}_depth'] = float(depth) if np.isfinite(depth) else 0.0
+                    features[f'{hand_prefix}_aspect'] = float(aspect_ratio) if np.isfinite(aspect_ratio) else 0.0
+                    
+                    # SECTION 4: Inter-finger distances (10 features per hand) - EXACT naming
+                    finger_distance_count = 0
+                    for i in range(len(fingertip_indices)):
+                        for j in range(i+1, len(fingertip_indices)):
+                            tip1_idx = fingertip_indices[i]
+                            tip2_idx = fingertip_indices[j]
+                            
+                            if tip1_idx < len(x_coords) and tip2_idx < len(x_coords):
+                                dist = np.sqrt((x_coords[tip1_idx] - x_coords[tip2_idx])**2 + 
+                                             (y_coords[tip1_idx] - y_coords[tip2_idx])**2 + 
+                                             (z_coords[tip1_idx] - z_coords[tip2_idx])**2)
+                                features[f'{hand_prefix}_inter_{finger_distance_count:02d}'] = float(dist) if np.isfinite(dist) else 0.0
+                            else:
+                                features[f'{hand_prefix}_inter_{finger_distance_count:02d}'] = 0.0
+                            finger_distance_count += 1
+                    
+                    # SECTION 5: Important landmark coordinates (18 features per hand) - EXACT naming
+                    important_landmarks = [0, 4, 8, 12, 16, 20]  # wrist and fingertips
+                    for lm_idx in important_landmarks:
+                        if lm_idx < len(x_coords):
+                            features[f'{hand_prefix}_lm{lm_idx:02d}_x'] = float(x_coords[lm_idx])
+                            features[f'{hand_prefix}_lm{lm_idx:02d}_y'] = float(y_coords[lm_idx])
+                            features[f'{hand_prefix}_lm{lm_idx:02d}_z'] = float(z_coords[lm_idx])
+                        else:
+                            features[f'{hand_prefix}_lm{lm_idx:02d}_x'] = 0.0
+                            features[f'{hand_prefix}_lm{lm_idx:02d}_y'] = 0.0
+                            features[f'{hand_prefix}_lm{lm_idx:02d}_z'] = 0.0
+                else:
+                    # Hand doesn't exist - fill with zeros (49 features per hand) - EXACT naming
+                    # 12 stats + 5 tip distances + 4 geometry + 10 inter-finger + 18 landmarks = 49
+                    for i in range(12):
+                        features[f'{hand_prefix}_stat_{i:02d}'] = 0.0
+                    for i in range(5):
+                        features[f'{hand_prefix}_tip_dist_{i:02d}'] = 0.0
+                    features[f'{hand_prefix}_width'] = 0.0
+                    features[f'{hand_prefix}_height'] = 0.0
+                    features[f'{hand_prefix}_depth'] = 0.0
+                    features[f'{hand_prefix}_aspect'] = 0.0
+                    for i in range(10):
+                        features[f'{hand_prefix}_inter_{i:02d}'] = 0.0
+                    important_landmarks = [0, 4, 8, 12, 16, 20]
+                    for lm_idx in important_landmarks:
+                        features[f'{hand_prefix}_lm{lm_idx:02d}_x'] = 0.0
+                        features[f'{hand_prefix}_lm{lm_idx:02d}_y'] = 0.0
+                        features[f'{hand_prefix}_lm{lm_idx:02d}_z'] = 0.0
+            else:
+                # Hand data incomplete - fill with zeros (49 features per hand) - EXACT naming
+                for i in range(12):
+                    features[f'{hand_prefix}_stat_{i:02d}'] = 0.0
+                for i in range(5):
+                    features[f'{hand_prefix}_tip_dist_{i:02d}'] = 0.0
+                features[f'{hand_prefix}_width'] = 0.0
+                features[f'{hand_prefix}_height'] = 0.0
+                features[f'{hand_prefix}_depth'] = 0.0
+                features[f'{hand_prefix}_aspect'] = 0.0
+                for i in range(10):
+                    features[f'{hand_prefix}_inter_{i:02d}'] = 0.0
+                important_landmarks = [0, 4, 8, 12, 16, 20]
+                for lm_idx in important_landmarks:
+                    features[f'{hand_prefix}_lm{lm_idx:02d}_x'] = 0.0
+                    features[f'{hand_prefix}_lm{lm_idx:02d}_y'] = 0.0
+                    features[f'{hand_prefix}_lm{lm_idx:02d}_z'] = 0.0
+        
+        # SECTION 6: Two-hand interaction features (13 features) - EXACT naming
+        if len(hand1_data) >= 63 and len(hand2_data) >= 63:
+            hand1_exists = not all(x == 0 and y == 0 and z == 0 for x, y, z in zip(hand1_data[::3], hand1_data[1::3], hand1_data[2::3]))
+            hand2_exists = not all(x == 0 and y == 0 and z == 0 for x, y, z in zip(hand2_data[::3], hand2_data[1::3], hand2_data[2::3]))
+            
+            if hand1_exists and hand2_exists:
+                # Wrist positions
+                wrist1_x, wrist1_y, wrist1_z = hand1_data[0], hand1_data[1], hand1_data[2]
+                wrist2_x, wrist2_y, wrist2_z = hand2_data[0], hand2_data[1], hand2_data[2]
+                
+                # Distance between wrists - EXACT naming
+                inter_wrist_dist = np.sqrt((wrist1_x - wrist2_x)**2 + 
+                                         (wrist1_y - wrist2_y)**2 + 
+                                         (wrist1_z - wrist2_z)**2)
+                features['inter_wrist_dist'] = float(inter_wrist_dist) if# src/data_preprocessing/feature_extractor.py - FIXED VERSION
 
 import pandas as pd
 import numpy as np
@@ -8,8 +141,8 @@ from sklearn.feature_selection import SelectKBest, mutual_info_classif
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_basic_features(landmarks_data):
-    """Create comprehensive basic features from landmarks"""
+def create_standardized_features(landmarks_data):
+    """Create standardized features matching training format"""
     try:
         features = {}
         
@@ -19,53 +152,56 @@ def create_basic_features(landmarks_data):
         
         feature_idx = 0
         
+        # Process each hand consistently
         for hand_idx, hand_data in enumerate([hand1_data, hand2_data]):
+            hand_prefix = f'h{hand_idx}'
+            
             if len(hand_data) >= 63:
-                x_coords = hand_data[::3]   # Every 3rd starting from 0 (x coordinates)
-                y_coords = hand_data[1::3]  # Every 3rd starting from 1 (y coordinates) 
-                z_coords = hand_data[2::3]  # Every 3rd starting from 2 (z coordinates)
+                x_coords = hand_data[::3]   # x coordinates
+                y_coords = hand_data[1::3]  # y coordinates
+                z_coords = hand_data[2::3]  # z coordinates
                 
                 # Check if hand exists (not all zeros)
-                hand_exists = not all(x == 0 and y == 0 for x, y in zip(x_coords, y_coords))
+                hand_exists = not all(x == 0 and y == 0 and z == 0 for x, y, z in zip(x_coords, y_coords, z_coords))
                 
                 if hand_exists:
-                    # Basic statistics for each coordinate
-                    stats = [
-                        np.mean(x_coords), np.std(x_coords), np.min(x_coords), np.max(x_coords),
-                        np.mean(y_coords), np.std(y_coords), np.min(y_coords), np.max(y_coords),
-                        np.mean(z_coords), np.std(z_coords), np.min(z_coords), np.max(z_coords),
-                    ]
+                    # SECTION 1: Basic statistics (12 features per hand)
+                    x_stats = [np.mean(x_coords), np.std(x_coords), np.min(x_coords), np.max(x_coords)]
+                    y_stats = [np.mean(y_coords), np.std(y_coords), np.min(y_coords), np.max(y_coords)]
+                    z_stats = [np.mean(z_coords), np.std(z_coords), np.min(z_coords), np.max(z_coords)]
                     
-                    for i, stat in enumerate(stats):
-                        features[f'h{hand_idx}_stat_{i}'] = float(stat) if np.isfinite(stat) else 0.0
-                        feature_idx += 1
+                    all_stats = x_stats + y_stats + z_stats
                     
-                    # Wrist position (landmark 0)
+                    for i, stat in enumerate(all_stats):
+                        features[f'{hand_prefix}_stat_{i}'] = float(stat) if np.isfinite(stat) else 0.0
+                    
+                    # SECTION 2: Fingertip distances from wrist (5 features per hand)
                     wrist_x, wrist_y, wrist_z = x_coords[0], y_coords[0], z_coords[0]
-                    
-                    # Distances from wrist to fingertips
                     fingertip_indices = [4, 8, 12, 16, 20]  # thumb, index, middle, ring, pinky
-                    for tip_idx in fingertip_indices:
+                    
+                    for i, tip_idx in enumerate(fingertip_indices):
                         if tip_idx < len(x_coords):
                             dist = np.sqrt((x_coords[tip_idx] - wrist_x)**2 + 
                                          (y_coords[tip_idx] - wrist_y)**2 + 
                                          (z_coords[tip_idx] - wrist_z)**2)
-                            features[f'h{hand_idx}_tip_{tip_idx}_dist'] = float(dist) if np.isfinite(dist) else 0.0
-                            feature_idx += 1
+                            features[f'{hand_prefix}_tip_dist_{i}'] = float(dist) if np.isfinite(dist) else 0.0
+                        else:
+                            features[f'{hand_prefix}_tip_dist_{i}'] = 0.0
                     
-                    # Hand geometry
+                    # SECTION 3: Hand geometry (4 features per hand)
                     width = max(x_coords) - min(x_coords)
                     height = max(y_coords) - min(y_coords)
                     depth = max(z_coords) - min(z_coords)
+                    aspect_ratio = width / (height + 1e-8)
                     
-                    features[f'h{hand_idx}_width'] = float(width) if np.isfinite(width) else 0.0
-                    features[f'h{hand_idx}_height'] = float(height) if np.isfinite(height) else 0.0
-                    features[f'h{hand_idx}_depth'] = float(depth) if np.isfinite(depth) else 0.0
-                    features[f'h{hand_idx}_aspect'] = float(width / (height + 1e-8)) if np.isfinite(width) and np.isfinite(height) else 0.0
-                    feature_idx += 4
+                    features[f'{hand_prefix}_width'] = float(width) if np.isfinite(width) else 0.0
+                    features[f'{hand_prefix}_height'] = float(height) if np.isfinite(height) else 0.0
+                    features[f'{hand_prefix}_depth'] = float(depth) if np.isfinite(depth) else 0.0
+                    features[f'{hand_prefix}_aspect'] = float(aspect_ratio) if np.isfinite(aspect_ratio) else 0.0
                     
-                    # Inter-finger distances
-                    for i in range(len(fingertip_indices)-1):
+                    # SECTION 4: Inter-finger distances (10 features per hand)
+                    finger_distance_count = 0
+                    for i in range(len(fingertip_indices)):
                         for j in range(i+1, len(fingertip_indices)):
                             tip1_idx = fingertip_indices[i]
                             tip2_idx = fingertip_indices[j]
@@ -74,45 +210,59 @@ def create_basic_features(landmarks_data):
                                 dist = np.sqrt((x_coords[tip1_idx] - x_coords[tip2_idx])**2 + 
                                              (y_coords[tip1_idx] - y_coords[tip2_idx])**2 + 
                                              (z_coords[tip1_idx] - z_coords[tip2_idx])**2)
-                                features[f'h{hand_idx}_inter_{tip1_idx}_{tip2_idx}'] = float(dist) if np.isfinite(dist) else 0.0
-                                feature_idx += 1
+                                features[f'{hand_prefix}_inter_{finger_distance_count}'] = float(dist) if np.isfinite(dist) else 0.0
+                            else:
+                                features[f'{hand_prefix}_inter_{finger_distance_count}'] = 0.0
+                            finger_distance_count += 1
+                    
+                    # SECTION 5: Important landmark coordinates (18 features per hand)
+                    important_landmarks = [0, 4, 8, 12, 16, 20]  # wrist and fingertips
+                    for lm_idx in important_landmarks:
+                        if lm_idx < len(x_coords):
+                            features[f'{hand_prefix}_lm{lm_idx}_x'] = float(x_coords[lm_idx])
+                            features[f'{hand_prefix}_lm{lm_idx}_y'] = float(y_coords[lm_idx])
+                            features[f'{hand_prefix}_lm{lm_idx}_z'] = float(z_coords[lm_idx])
+                        else:
+                            features[f'{hand_prefix}_lm{lm_idx}_x'] = 0.0
+                            features[f'{hand_prefix}_lm{lm_idx}_y'] = 0.0
+                            features[f'{hand_prefix}_lm{lm_idx}_z'] = 0.0
                 else:
-                    # Fill with zeros for missing hand but keep feature names consistent
-                    num_features_per_hand = 12 + 5 + 4 + 10  # stats + tip_dists + geometry + inter_dists
-                    for i in range(num_features_per_hand):
-                        features[f'h{hand_idx}_missing_{i}'] = 0.0
-                        feature_idx += 1
+                    # Hand doesn't exist - fill with zeros (49 features per hand)
+                    # 12 stats + 5 tip distances + 4 geometry + 10 inter-finger + 18 landmarks
+                    total_features_per_hand = 49
+                    for i in range(total_features_per_hand):
+                        features[f'{hand_prefix}_missing_{i}'] = 0.0
             else:
-                # Hand data incomplete
-                num_features_per_hand = 12 + 5 + 4 + 10
-                for i in range(num_features_per_hand):
-                    features[f'h{hand_idx}_incomplete_{i}'] = 0.0
-                    feature_idx += 1
+                # Hand data incomplete - fill with zeros
+                total_features_per_hand = 49
+                for i in range(total_features_per_hand):
+                    features[f'{hand_prefix}_incomplete_{i}'] = 0.0
         
-        # Two-hand interaction features
+        # SECTION 6: Two-hand interaction features (12 features)
         if len(hand1_data) >= 63 and len(hand2_data) >= 63:
-            hand1_exists = not all(x == 0 and y == 0 for x, y in zip(hand1_data[::3], hand1_data[1::3]))
-            hand2_exists = not all(x == 0 and y == 0 for x, y in zip(hand2_data[::3], hand2_data[1::3]))
+            hand1_exists = not all(x == 0 and y == 0 and z == 0 for x, y, z in zip(hand1_data[::3], hand1_data[1::3], hand1_data[2::3]))
+            hand2_exists = not all(x == 0 and y == 0 and z == 0 for x, y, z in zip(hand2_data[::3], hand2_data[1::3], hand2_data[2::3]))
             
             if hand1_exists and hand2_exists:
-                # Distance between wrists
+                # Wrist positions
                 wrist1_x, wrist1_y, wrist1_z = hand1_data[0], hand1_data[1], hand1_data[2]
                 wrist2_x, wrist2_y, wrist2_z = hand2_data[0], hand2_data[1], hand2_data[2]
                 
+                # Distance between wrists
                 inter_wrist_dist = np.sqrt((wrist1_x - wrist2_x)**2 + 
                                          (wrist1_y - wrist2_y)**2 + 
                                          (wrist1_z - wrist2_z)**2)
                 features['inter_wrist_dist'] = float(inter_wrist_dist) if np.isfinite(inter_wrist_dist) else 0.0
                 
                 # Relative positions
-                features['hands_relative_x'] = float(wrist1_x - wrist2_x) if np.isfinite(wrist1_x - wrist2_x) else 0.0
-                features['hands_relative_y'] = float(wrist1_y - wrist2_y) if np.isfinite(wrist1_y - wrist2_y) else 0.0
-                features['hands_relative_z'] = float(wrist1_z - wrist2_z) if np.isfinite(wrist1_z - wrist2_z) else 0.0
+                features['hands_rel_x'] = float(wrist1_x - wrist2_x) if np.isfinite(wrist1_x - wrist2_x) else 0.0
+                features['hands_rel_y'] = float(wrist1_y - wrist2_y) if np.isfinite(wrist1_y - wrist2_y) else 0.0
+                features['hands_rel_z'] = float(wrist1_z - wrist2_z) if np.isfinite(wrist1_z - wrist2_z) else 0.0
                 
-                # Cross-hand fingertip distances
-                fingertip_indices = [4, 8, 12, 16, 20]
-                for tip1_idx in fingertip_indices[:3]:  # Just first 3 to avoid too many features
-                    for tip2_idx in fingertip_indices[:3]:
+                # Cross-hand fingertip distances (top 3 fingers only to limit features)
+                cross_distances = []
+                for tip1_idx in [4, 8, 12]:  # thumb, index, middle from hand1
+                    for tip2_idx in [4, 8, 12]:  # thumb, index, middle from hand2
                         h1_tip_x = hand1_data[tip1_idx * 3]
                         h1_tip_y = hand1_data[tip1_idx * 3 + 1]
                         h1_tip_z = hand1_data[tip1_idx * 3 + 2]
@@ -124,55 +274,45 @@ def create_basic_features(landmarks_data):
                         cross_dist = np.sqrt((h1_tip_x - h2_tip_x)**2 + 
                                            (h1_tip_y - h2_tip_y)**2 + 
                                            (h1_tip_z - h2_tip_z)**2)
-                        features[f'cross_{tip1_idx}_{tip2_idx}'] = float(cross_dist) if np.isfinite(cross_dist) else 0.0
-            else:
-                # One or both hands missing
-                features['inter_wrist_dist'] = 0.0
-                features['hands_relative_x'] = 0.0
-                features['hands_relative_y'] = 0.0
-                features['hands_relative_z'] = 0.0
+                        cross_distances.append(float(cross_dist) if np.isfinite(cross_dist) else 0.0)
                 
-                # Fill cross distances with zeros
-                fingertip_indices = [4, 8, 12, 16, 20]
-                for tip1_idx in fingertip_indices[:3]:
-                    for tip2_idx in fingertip_indices[:3]:
-                        features[f'cross_{tip1_idx}_{tip2_idx}'] = 0.0
+                # Add cross distances (9 features)
+                for i, dist in enumerate(cross_distances):
+                    features[f'cross_dist_{i}'] = dist
+            else:
+                # One or both hands missing - fill interaction features with zeros
+                features['inter_wrist_dist'] = 0.0
+                features['hands_rel_x'] = 0.0
+                features['hands_rel_y'] = 0.0
+                features['hands_rel_z'] = 0.0
+                for i in range(9):
+                    features[f'cross_dist_{i}'] = 0.0
+        else:
+            # Insufficient hand data - fill interaction features with zeros
+            features['inter_wrist_dist'] = 0.0
+            features['hands_rel_x'] = 0.0
+            features['hands_rel_y'] = 0.0
+            features['hands_rel_z'] = 0.0
+            for i in range(9):
+                features[f'cross_dist_{i}'] = 0.0
         
-        # Add some raw landmark coordinates as features (most important ones)
-        important_landmarks = [0, 4, 8, 12, 16, 20]  # wrist and fingertips
-        for hand_idx in range(2):
-            base_idx = hand_idx * 63
-            for landmark_idx in important_landmarks:
-                coord_idx = base_idx + landmark_idx * 3
-                if coord_idx < len(landmarks_data):
-                    features[f'h{hand_idx}_lm{landmark_idx}_x'] = float(landmarks_data[coord_idx])
-                    features[f'h{hand_idx}_lm{landmark_idx}_y'] = float(landmarks_data[coord_idx + 1]) if coord_idx + 1 < len(landmarks_data) else 0.0
-                    features[f'h{hand_idx}_lm{landmark_idx}_z'] = float(landmarks_data[coord_idx + 2]) if coord_idx + 2 < len(landmarks_data) else 0.0
-                else:
-                    features[f'h{hand_idx}_lm{landmark_idx}_x'] = 0.0
-                    features[f'h{hand_idx}_lm{landmark_idx}_y'] = 0.0
-                    features[f'h{hand_idx}_lm{landmark_idx}_z'] = 0.0
-        
-        logger.info(f"Created {len(features)} basic features")
+        logger.debug(f"Created {len(features)} standardized features")
         return pd.DataFrame([features])
         
     except Exception as e:
-        logger.error(f"Basic feature creation failed: {e}")
-        # Emergency fallback - simple coordinate features
+        logger.error(f"Standardized feature creation failed: {e}")
+        # Emergency fallback - create minimal feature set
         emergency_features = {}
-        for i in range(min(126, len(landmarks_data))):
-            emergency_features[f'coord_{i}'] = float(landmarks_data[i]) if np.isfinite(landmarks_data[i]) else 0.0
         
-        # Pad to at least 50 features
-        while len(emergency_features) < 50:
-            emergency_features[f'pad_{len(emergency_features)}'] = 0.0
+        # Create exactly 110 features (2*49 + 12 interaction)
+        for i in range(110):
+            emergency_features[f'feature_{i}'] = 0.0
         
-        logger.info(f"Using emergency fallback: {len(emergency_features)} features")
         return pd.DataFrame([emergency_features])
 
-def extract_features(df_landmarks, max_features=80, perform_selection=True):
-    """Main feature extraction function"""
-    logger.info("Starting feature extraction...")
+def extract_features(df_landmarks, max_features=None, perform_selection=False):
+    """Main feature extraction function with standardized output"""
+    logger.info("Starting standardized feature extraction...")
     
     if df_landmarks.empty:
         logger.warning("Input DataFrame is empty")
@@ -194,16 +334,16 @@ def extract_features(df_landmarks, max_features=80, perform_selection=True):
             # Replace any NaN with 0
             landmarks_data = np.where(np.isfinite(landmarks_data), landmarks_data, 0.0)
             
-            # Create features for this sample
-            features_df = create_basic_features(landmarks_data)
+            # Create standardized features
+            features_df = create_standardized_features(landmarks_data)
             
             if not features_df.empty:
                 all_features.append(features_df.iloc[0].to_dict())
             else:
                 logger.warning(f"Failed to extract features for row {idx}")
-                # Create empty features
-                empty_features = {f'empty_{i}': 0.0 for i in range(50)}
-                all_features.append(empty_features)
+                # Create emergency features
+                emergency_features = {f'feature_{i}': 0.0 for i in range(110)}
+                all_features.append(emergency_features)
         
         if not all_features:
             logger.error("No features extracted")
@@ -212,33 +352,33 @@ def extract_features(df_landmarks, max_features=80, perform_selection=True):
         # Create final DataFrame
         features_df = pd.DataFrame(all_features)
         
-        # Add metadata columns
-        if 'label' in df_landmarks.columns:
-            features_df['label'] = df_landmarks['label'].values
-        if 'sign_language_type' in df_landmarks.columns:
-            features_df['sign_language_type'] = df_landmarks['sign_language_type'].values
-        if 'is_mirrored' in df_landmarks.columns:
-            features_df['is_mirrored'] = df_landmarks['is_mirrored'].values
+        # Add metadata columns if they exist
+        metadata_columns = ['label', 'sign_language_type', 'is_mirrored', 'image_name']
+        for col in metadata_columns:
+            if col in df_landmarks.columns:
+                features_df[col] = df_landmarks[col].values
         
         # Clean features
         feature_columns = [col for col in features_df.columns 
-                          if col not in ['label', 'sign_language_type', 'is_mirrored']]
+                          if col not in metadata_columns]
         
+        # Ensure all features are numeric
         for col in feature_columns:
             features_df[col] = pd.to_numeric(features_df[col], errors='coerce').fillna(0.0)
             features_df[col] = features_df[col].replace([np.inf, -np.inf], 0.0)
         
-        # Remove constant features
-        feature_variances = features_df[feature_columns].var()
-        constant_features = feature_variances[feature_variances == 0].index.tolist()
+        # Remove constant features (variance = 0)
+        if len(features_df) > 1:  # Only if we have multiple samples
+            feature_variances = features_df[feature_columns].var()
+            constant_features = feature_variances[feature_variances == 0].index.tolist()
+            
+            if constant_features:
+                logger.info(f"Removing {len(constant_features)} constant features")
+                features_df = features_df.drop(columns=constant_features)
+                feature_columns = [col for col in feature_columns if col not in constant_features]
         
-        if constant_features:
-            logger.info(f"Removing {len(constant_features)} constant features")
-            features_df = features_df.drop(columns=constant_features)
-            feature_columns = [col for col in feature_columns if col not in constant_features]
-        
-        # Feature selection if needed and we have labels
-        if perform_selection and 'label' in features_df.columns and len(feature_columns) > max_features:
+        # Feature selection (only if requested and we have labels)
+        if perform_selection and 'label' in features_df.columns and max_features and len(feature_columns) > max_features:
             try:
                 X = features_df[feature_columns]
                 y = features_df['label']
@@ -253,12 +393,9 @@ def extract_features(df_landmarks, max_features=80, perform_selection=True):
                 result_df = pd.DataFrame(X_selected, columns=selected_features, index=features_df.index)
                 
                 # Add metadata back
-                if 'label' in features_df.columns:
-                    result_df['label'] = features_df['label']
-                if 'sign_language_type' in features_df.columns:
-                    result_df['sign_language_type'] = features_df['sign_language_type']
-                if 'is_mirrored' in features_df.columns:
-                    result_df['is_mirrored'] = features_df['is_mirrored']
+                for col in metadata_columns:
+                    if col in features_df.columns:
+                        result_df[col] = features_df[col]
                 
                 features_df = result_df
                 
@@ -266,7 +403,7 @@ def extract_features(df_landmarks, max_features=80, perform_selection=True):
                 logger.warning(f"Feature selection failed: {e}, using all features")
         
         final_feature_count = len([col for col in features_df.columns 
-                                  if col not in ['label', 'sign_language_type', 'is_mirrored']])
+                                  if col not in metadata_columns])
         
         logger.info(f"Feature extraction completed: {final_feature_count} features, {len(features_df)} samples")
         
@@ -280,18 +417,54 @@ def extract_features(df_landmarks, max_features=80, perform_selection=True):
         logger.error(f"Feature extraction failed: {e}")
         return pd.DataFrame()
 
+def validate_feature_consistency(features_df, expected_feature_names=None):
+    """Validate that features match expected format"""
+    if features_df.empty:
+        return False, "Empty DataFrame"
+    
+    feature_columns = [col for col in features_df.columns 
+                      if col not in ['label', 'sign_language_type', 'is_mirrored', 'image_name']]
+    
+    if expected_feature_names:
+        missing_features = set(expected_feature_names) - set(feature_columns)
+        extra_features = set(feature_columns) - set(expected_feature_names)
+        
+        if missing_features:
+            logger.warning(f"Missing expected features: {list(missing_features)[:5]}...")
+        if extra_features:
+            logger.warning(f"Extra unexpected features: {list(extra_features)[:5]}...")
+        
+        # Check if at least 80% of expected features are present
+        match_ratio = len(set(expected_feature_names) & set(feature_columns)) / len(expected_feature_names)
+        if match_ratio < 0.8:
+            return False, f"Feature mismatch: only {match_ratio:.1%} features match"
+    
+    # Check for NaN or infinite values
+    numeric_issues = features_df[feature_columns].isin([np.inf, -np.inf]).sum().sum()
+    nan_issues = features_df[feature_columns].isnull().sum().sum()
+    
+    if numeric_issues > 0:
+        logger.warning(f"Found {numeric_issues} infinite values in features")
+    if nan_issues > 0:
+        logger.warning(f"Found {nan_issues} NaN values in features")
+    
+    return True, f"Validation passed: {len(feature_columns)} features"
+
 def analyze_feature_importance(features_df, top_k=10):
-    """Analyze feature importance"""
+    """Analyze feature importance using mutual information"""
     if 'label' not in features_df.columns:
         return None
     
-    X = features_df.drop(columns=['label', 'sign_language_type', 'is_mirrored'], errors='ignore')
+    feature_columns = [col for col in features_df.columns 
+                      if col not in ['label', 'sign_language_type', 'is_mirrored', 'image_name']]
+    
+    X = features_df[feature_columns]
     y = features_df['label']
     
     try:
         scores = mutual_info_classif(X, y, random_state=42)
         feature_importance = pd.DataFrame({
-            'feature': X.columns,
+            'feature': feature_columns,
             'importance': scores
         }).sort_values('importance', ascending=False)
         
