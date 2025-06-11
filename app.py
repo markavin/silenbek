@@ -871,6 +871,20 @@ def get_models_endpoint(): # Renamed to avoid confusion with class method
         'hand_detection': 'enhanced_two_hand_support',
         'models_detail': {lang: {'available_types': info['available_models']} for lang, info in api.models.items()}
     })
+    
+@app.route("/models", methods=["GET"])
+def list_models():
+    if hasattr(api, 'models'):
+        return jsonify({
+            "status": "success",
+            "models_loaded": list(api.models.keys())
+        })
+    else:
+        return jsonify({
+            "status": "error",
+            "message": "Model registry not found."
+        }), 500
+
 
 # Main execution block
 if __name__ == '__main__':
