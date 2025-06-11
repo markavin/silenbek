@@ -16,7 +16,7 @@ from datetime import datetime
 import io
 from PIL import Image # For image decoding
 import pandas as pd # For DataFrame operations
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 
 # Fix for Windows console output (if running locally on Windows)
@@ -740,30 +740,45 @@ class EnhancedSignLanguageAPI:
 # Initialize API instance globally
 api = EnhancedSignLanguageAPI()
 
+# Ganti health check function di app.py dengan ini:
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    # Update health check to reflect detailed loading status
-    models_status = {}
-    for lang, info in api.models.items():
-        models_status[lang] = {
-            'sklearn': 'loaded' if 'sklearn_model' in info else 'not_loaded',
-            'tensorflow': 'loaded' if 'tensorflow_model' in info else 'not_loaded',
-            'available_types': info['available_models']
-        }
+    """Safe health check endpoint"""
+    try:
+        # Update health check to reflect detailed loading status
+        models_status = {}
+        for lang, info in api.models.items():
+            models_status[lang] = {
+                'sklearn': 'loaded' if 'sklearn_model' in info else 'not_loaded',
+                'tensorflow': 'loaded' if 'tensorflow_model' in info else 'not_loaded',
+                'available_types': info['available_models']
+            }
 
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
-        'models_summary': models_status,
-        'total_languages_loaded': len(api.models),
-        'mediapipe_ready': api.hands is not None,
-        'feature_extractor_available': extract_features_available,
-        'hand_detection_config': {
-            'max_num_hands': api.hands.max_num_hands,
-            'min_detection_confidence': api.hands.min_detection_confidence,
-            'min_tracking_confidence': api.hands.min_tracking_confidence,
-        }
-    })
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'models_summary': models_status,
+            'total_languages_loaded': len(api.models),
+            'mediapipe_ready': api.hands is not None,
+            'feature_extractor_available': extract_features_available,
+            'backend_version': '2.0.1-fixed',
+            'endpoints': {
+                'health': '/api/health',
+                'models': '/api/models', 
+                'translate': '/api/translate'
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat(),
+            'backend_alive': True
+        }), 500
+    
 
 @app.route('/api/translate', methods=['POST'])
 def translate_sign_endpoint(): # Renamed to avoid confusion with class method
