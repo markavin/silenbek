@@ -131,7 +131,211 @@ def create_standardized_features(landmarks_data):
                 inter_wrist_dist = np.sqrt((wrist1_x - wrist2_x)**2 + 
                                          (wrist1_y - wrist2_y)**2 + 
                                          (wrist1_z - wrist2_z)**2)
-                features['inter_wrist_dist'] = float(inter_wrist_dist) if# src/data_preprocessing/feature_extractor.py - FIXED VERSION
+                features['inter_wrist_dist'] = float(inter_wrist_dist) if np.isfinite(inter_wrist_dist) else 0.0 np.isfinite(inter_wrist_dist) else 0.0
+                
+                # Relative positions - EXACT naming
+                features['hands_rel_x'] = float(wrist1_x - wrist2_x) if np.isfinite(wrist1_x - wrist2_x) else 0.0
+                features['hands_rel_y'] = float(wrist1_y - wrist2_y) if np.isfinite(wrist1_y - wrist2_y) else 0.0
+                features['hands_rel_z'] = float(wrist1_z - wrist2_z) if np.isfinite(wrist1_z - wrist2_z) else 0.0
+                
+                # Cross-hand fingertip distances (9 features) - EXACT naming
+                cross_distances = []
+                for tip1_idx in [4, 8, 12]:  # thumb, index, middle from hand1
+                    for tip2_idx in [4, 8, 12]:  # thumb, index, middle from hand2
+                        h1_tip_x = hand1_data[tip1_idx * 3]
+                        h1_tip_y = hand1_data[tip1_idx * 3 + 1]
+                        h1_tip_z = hand1_data[tip1_idx * 3 + 2]
+                        
+                        h2_tip_x = hand2_data[tip2_idx * 3]
+                        h2_tip_y = hand2_data[tip2_idx * 3 + 1]
+                        h2_tip_z = hand2_data[tip2_idx * 3 + 2]
+                        
+                        cross_dist = np.sqrt((h1_tip_x - h2_tip_x)**2 + 
+                                           (h1_tip_y - h2_tip_y)**2 + 
+                                           (h1_tip_z - h2_tip_z)**2)
+                        cross_distances.append(float(cross_dist) if np.isfinite(cross_dist) else 0.0)
+                
+                # Add cross distances with EXACT naming
+                for i, dist in enumerate(cross_distances):
+                    features[f'cross_dist_{i:02d}'] = dist
+            else:
+                # One or both hands missing - fill interaction features with zeros - EXACT naming
+                features['inter_wrist_dist'] = 0.0
+                features['hands_rel_x'] = 0.0
+                features['hands_rel_y'] = 0.0
+                features['hands_rel_z'] = 0.0
+                for i in range(9):
+                    features[f'cross_dist_{i:02d}'] = 0.0
+        else:
+            # Insufficient hand data - fill interaction features with zeros - EXACT naming
+            features['inter_wrist_dist'] = 0.0
+            features['hands_rel_x'] = 0.0
+            features['hands_rel_y'] = 0.0
+            features['hands_rel_z'] = 0.0
+            for i in range(9):
+                features[f'cross_dist_{i:02d}'] = 0.0
+        
+        # CRITICAL: Sort features alphabetically for consistent order
+        sorted_features = dict(sorted(features.items()))
+        
+        logger.debug(f"Created {len(sorted_features)} standardized features in alphabetical order")
+        
+        # Verify total feature count (should be 2*49 + 13 = 111)
+        expected_total = 111
+        if len(sorted_features) != expected_total:
+            logger.warning(f"Feature count mismatch! Expected {expected_total}, got {len(sorted_features)}")
+        
+        # Log feature structure for debugging
+        feature_types = {}
+        for key in sorted_features.keys():
+            if 'hand_0' in key:
+                feature_types['hand_0'] = feature_types.get('hand_0', 0) + 1
+            elif 'hand_1' in key:
+                feature_types['hand_1'] = feature_types.get('hand_1', 0) + 1
+            elif any(x in key for x in ['inter_', 'hands_', 'cross_']):
+                feature_types['interaction'] = feature_types.get('interaction', 0) + 1
+        
+        logger.debug(f"Feature breakdown: {feature_types}")
+        
+        return pd.DataFrame([sorted_features])
+        
+    except Exception as e:
+        logger.error(f"Standardized feature creation failed: {e}")
+        # Emergency fallback with EXACT naming
+        emergency_features = {}
+        
+        # Create exactly 111 features with consistent naming
+        for hand_idx in range(2):
+            hand_prefix = f'hand_{hand_idx}'
+            for i in range(12):
+                emergency_features[f'{hand_prefix}_stat_{i:02d}'] = 0.0
+            for i in range(5):
+                emergency_features[f'{hand_prefix}_tip_dist_{i:02d}'] = 0.0
+            emergency_features[f'{hand_prefix}_width'] = 0.0
+            emergency_features[f'{hand_prefix}_height'] = 0.0
+            emergency_features[f'{hand_prefix}_depth'] = 0.0
+            emergency_features[f'{hand_prefix}_aspect'] = 0.0
+            for i in range(10):
+                emergency_features[f'{hand_prefix}_inter_{i:02d}'] = 0.0
+            for lm_idx in [0, 4, 8, 12, 16, 20]:
+                emergency_features[f'{hand_prefix}_lm{lm_idx:02d}_x'] = 0.0
+                emergency_features[f'{hand_prefix}_lm{lm_idx:02d}_y'] = 0.0
+                emergency_features[f'{hand_prefix}_lm{lm_idx:02d}_z'] = 0.0
+        
+        # Interaction features
+        emergency_features['inter_wrist_dist'] = 0.0
+        emergency_features['hands_rel_x'] = 0.0
+        emergency_features['hands_rel_y'] = 0.0
+        emergency_features['hands_rel_z'] = 0.0
+        for i in range(9):
+            emergency_features[f'cross_dist_{i:02d}'] = 0.0
+        
+        # Sort emergency features too
+        sorted_emergency = dict(sorted(emergency_features.items()))
+        
+        return pd.DataFrame([sorted_emergency])
+
+def get_expected_feature_names():
+    """Get the exact expected feature names in the correct order for model compatibility"""
+    feature_names = []
+    
+    # Hand features (2 hands * 49 features each = 98)
+    for hand_idx in range(2):
+        hand_prefix = f'hand_{hand_idx}'
+        
+        # Stats (12 per hand)
+        for i in range(12):
+            feature_names.append(f'{hand_prefix}_stat_{i:02d}')
+        
+        # Tip distances (5 per hand)
+        for i in range(5):
+            feature_names.append(f'{hand_prefix}_tip_dist_{i:02d}')
+        
+        # Geometry (4 per hand)
+        feature_names.extend([
+            f'{hand_prefix}_width',
+            f'{hand_prefix}_height', 
+            f'{hand_prefix}_depth',
+            f'{hand_prefix}_aspect'
+        ])
+        
+        # Inter-finger distances (10 per hand)
+        for i in range(10):
+            feature_names.append(f'{hand_prefix}_inter_{i:02d}')
+        
+        # Landmark coordinates (18 per hand: 6 landmarks * 3 coords)
+        for lm_idx in [0, 4, 8, 12, 16, 20]:
+            feature_names.extend([
+                f'{hand_prefix}_lm{lm_idx:02d}_x',
+                f'{hand_prefix}_lm{lm_idx:02d}_y',
+                f'{hand_prefix}_lm{lm_idx:02d}_z'
+            ])
+    
+    # Interaction features (13 total)
+    feature_names.extend([
+        'inter_wrist_dist',
+        'hands_rel_x',
+        'hands_rel_y', 
+        'hands_rel_z'
+    ])
+    
+    # Cross distances (9)
+    for i in range(9):
+        feature_names.append(f'cross_dist_{i:02d}')
+    
+    # Sort alphabetically for consistency
+    feature_names.sort()
+    
+    return feature_names
+
+def validate_feature_names_consistency(features_df):
+    """Validate that extracted features match expected names exactly"""
+    expected_names = get_expected_feature_names()
+    
+    feature_columns = [col for col in features_df.columns 
+                      if col not in ['label', 'sign_language_type', 'is_mirrored', 'image_name']]
+    
+    missing_features = set(expected_names) - set(feature_columns)
+    extra_features = set(feature_columns) - set(expected_names)
+    
+    is_valid = True
+    issues = []
+    
+    if missing_features:
+        is_valid = False
+        issues.append(f"Missing {len(missing_features)} expected features: {list(missing_features)[:5]}...")
+    
+    if extra_features:
+        is_valid = False
+        issues.append(f"Found {len(extra_features)} unexpected features: {list(extra_features)[:5]}...")
+    
+    if len(feature_columns) != len(expected_names):
+        is_valid = False
+        issues.append(f"Feature count mismatch: expected {len(expected_names)}, got {len(feature_columns)}")
+    
+    # Check order
+    if feature_columns != expected_names:
+        order_issues = []
+        for i, (expected, actual) in enumerate(zip(expected_names[:10], feature_columns[:10])):
+            if expected != actual:
+                order_issues.append(f"pos {i}: expected '{expected}', got '{actual}'")
+        if order_issues:
+            issues.append(f"Feature order mismatch: {order_issues}")
+    
+    result = {
+        'is_valid': is_valid,
+        'issues': issues,
+        'expected_count': len(expected_names),
+        'actual_count': len(feature_columns),
+        'match_ratio': len(set(expected_names) & set(feature_columns)) / len(expected_names)
+    }
+    
+    if is_valid:
+        logger.info("✅ Feature names validation PASSED - exact match with training format")
+    else:
+        logger.warning(f"❌ Feature names validation FAILED: {'; '.join(issues)}")
+    
+    return result# src/data_preprocessing/feature_extractor.py - FIXED VERSION
 
 import pandas as pd
 import numpy as np
