@@ -103,7 +103,7 @@ def download_model_files():
         "data/models/sign_language_model_bisindo.pkl": "https://drive.google.com/uc?export=download&id=1h3y3fTJEGWyhULEipYJXTK8R2ioKII3N",
         "data/models/sign_language_model_bisindo_tensorflow.h5": "https://drive.google.com/uc?export=download&id=11dTcJL3GzFoAskOlhblFmETrX7Pk4iw0",
         "data/models/sign_language_model_bisindo_tensorflow_meta.pkl": "https://drive.google.com/uc?export=download&id=1wX1pp_h8jc8IJFC4_kUmcLyy6IhZGPy8",
-        "data/models/sign_language_model_bisindo_sklearn.pkl": "https://drive.google.com/uc?export=download&id=1GTIDqbuukwmC4iNBGWM569_K1PZNXdH3"
+        "data/models/sign_language_model_bisindo_sklearn.pkl": "https://huggingface.co/markavin/sign-language-bisindo-sklearn/resolve/main/sign_language_model_bisindo_sklearn.pkl"
     }
 
     for local_path, url in model_urls.items():
