@@ -1,4 +1,4 @@
-# src/models/train_model.py
+# src/models/train_model.py - FIXED COMPLETE VERSION
 
 import pandas as pd
 import numpy as np
@@ -17,6 +17,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.regularizers import l2
+from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -89,9 +90,9 @@ class FixedModelTrainer:
         for col in X.columns:
             X[col] = pd.to_numeric(X[col], errors='coerce').fillna(0.0)
         
-        # FIXED: More lenient variance threshold
+        # More lenient variance threshold
         feature_variance = X.var()
-        low_variance_threshold = 0.0001  # Very small threshold
+        low_variance_threshold = 0.0001
         low_variance_features = feature_variance[feature_variance < low_variance_threshold].index
         
         if len(low_variance_features) > 0:
@@ -101,16 +102,13 @@ class FixedModelTrainer:
         # If too few features, use all available
         if X.shape[1] < 5:
             logger.warning(f"Very few features remaining: {X.shape[1]}. Using all available features.")
-            # Restore all features and just remove completely constant ones
             X = dataframe[feature_cols].copy()
             X = X.fillna(0.0)
             X = X.replace([np.inf, -np.inf], 0.0)
             
-            # Convert to numeric
             for col in X.columns:
                 X[col] = pd.to_numeric(X[col], errors='coerce').fillna(0.0)
             
-            # Only remove completely constant features (variance = 0)
             feature_variance = X.var()
             constant_features = feature_variance[feature_variance == 0].index
             
@@ -123,7 +121,11 @@ class FixedModelTrainer:
                 return None, None, None, None, None, None, None
         
         logger.info(f"Features after filtering: {X.shape[1]}")
+        
+        # CRITICAL: Save feature names for model compatibility
         self.feature_names = X.columns.tolist()
+        logger.info(f"CRITICAL: Saved {len(self.feature_names)} feature names for model compatibility")
+        logger.info(f"First 10 feature names: {self.feature_names[:10]}")
         
         # Encode labels
         y_encoded = self.label_encoder.fit_transform(y)
@@ -433,7 +435,7 @@ class FixedModelTrainer:
         return best_model, best_performance
 
 def train_model(dataframe, model_save_base_name, language_type):
-    """Main training function"""
+    """Main training function with FIXED feature name saving"""
     logger.info(f"Starting training for {language_type}")
     
     if dataframe.empty:
@@ -466,7 +468,7 @@ def train_model(dataframe, model_save_base_name, language_type):
             logger.error("No valid models produced")
             return None, None
         
-        # Save models
+        # Save models with COMPLETE feature name preservation
         current_file_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.abspath(os.path.join(current_file_dir, '..', '..'))
         model_save_dir = os.path.join(project_root, 'data', 'models')
@@ -474,7 +476,7 @@ def train_model(dataframe, model_save_base_name, language_type):
         
         models_saved = []
         
-        # Save TensorFlow model
+        # Save TensorFlow model with COMPLETE metadata
         if tf_results is not None:
             tf_model_path = os.path.join(model_save_dir, f'{model_save_base_name}_{language_type.lower()}_tensorflow.h5')
             trainer.tensorflow_model.save(tf_model_path)
@@ -483,33 +485,43 @@ def train_model(dataframe, model_save_base_name, language_type):
             tf_metadata = {
                 'scaler': trainer.scaler,
                 'label_encoder': trainer.label_encoder,
-                'feature_names': trainer.feature_names,
+                'feature_names': trainer.feature_names,  # CRITICAL: Feature names saved here
                 'accuracy': tf_results['accuracy'],
                 'f1_macro': tf_results['f1_score'],
                 'loss': tf_results['loss'],
                 'language_type': language_type.upper(),
                 'model_type': 'FIXED_TENSORFLOW',
-                'dataset_analysis': analysis
+                'dataset_analysis': analysis,
+                'input_shape': tf_results['model'].input_shape,
+                'output_classes': len(trainer.label_encoder.classes_),
+                'class_names': list(trainer.label_encoder.classes_),
+                'feature_count': len(trainer.feature_names),
+                'training_timestamp': datetime.now().isoformat()
             }
             
             with open(tf_meta_path, 'wb') as f:
                 pickle.dump(tf_metadata, f)
             
             models_saved.append(f"TensorFlow: {tf_model_path}")
+            models_saved.append(f"TensorFlow Meta: {tf_meta_path}")
         
-        # Save Random Forest model
+        # Save Random Forest model with COMPLETE metadata
         if sklearn_results is not None:
             sklearn_model_path = os.path.join(model_save_dir, f'{model_save_base_name}_{language_type.lower()}_sklearn.pkl')
             sklearn_metadata = {
                 'model': trainer.sklearn_model,
                 'scaler': trainer.scaler,
-                'feature_names': trainer.feature_names,
+                'feature_names': trainer.feature_names,  # CRITICAL: Feature names saved here
                 'accuracy': sklearn_results['accuracy'],
                 'f1_macro': sklearn_results['f1_score'],
                 'language_type': language_type.upper(),
                 'model_type': 'FIXED_RANDOM_FOREST',
                 'dataset_analysis': analysis,
-                'feature_importance': sklearn_results['feature_importance'].to_dict()
+                'feature_importance': sklearn_results['feature_importance'].to_dict(),
+                'n_features': len(trainer.feature_names),
+                'class_names': list(trainer.sklearn_model.classes_),
+                'feature_count': len(trainer.feature_names),
+                'training_timestamp': datetime.now().isoformat()
             }
             
             with open(sklearn_model_path, 'wb') as f:
@@ -517,7 +529,25 @@ def train_model(dataframe, model_save_base_name, language_type):
             
             models_saved.append(f"Random Forest: {sklearn_model_path}")
         
-        # Save best model as combined
+        # Save standalone feature names file for debugging and compatibility
+        feature_names_path = os.path.join(model_save_dir, f'{model_save_base_name}_{language_type.lower()}_feature_names.pkl')
+        feature_names_metadata = {
+            'feature_names': trainer.feature_names,
+            'language_type': language_type.upper(),
+            'total_features': len(trainer.feature_names),
+            'first_10_features': trainer.feature_names[:10],
+            'last_10_features': trainer.feature_names[-10:],
+            'creation_timestamp': datetime.now().isoformat(),
+            'training_session': f"{model_save_base_name}_{language_type.lower()}",
+            'compatibility_note': 'These feature names MUST match exactly during inference for accurate predictions'
+        }
+        
+        with open(feature_names_path, 'wb') as f:
+            pickle.dump(feature_names_metadata, f)
+        
+        models_saved.append(f"Feature Names: {feature_names_path}")
+        
+        # Save best model as combined with COMPLETE metadata
         combined_path = os.path.join(model_save_dir, f'{model_save_base_name}_{language_type.lower()}.pkl')
         if best_model == 'tensorflow' and tf_results:
             best_metadata = tf_metadata.copy()
@@ -526,21 +556,35 @@ def train_model(dataframe, model_save_base_name, language_type):
         
         best_metadata['best_model'] = best_model
         best_metadata['best_performance'] = best_performance
+        best_metadata['all_available_models'] = []
+        if tf_results: best_metadata['all_available_models'].append('tensorflow')
+        if sklearn_results: best_metadata['all_available_models'].append('sklearn')
         
         with open(combined_path, 'wb') as f:
             pickle.dump(best_metadata, f)
         
-        models_saved.append(f"Best ({best_model}): {combined_path}")
+        models_saved.append(f"Best Combined ({best_model}): {combined_path}")
         
-        logger.info(f"Training completed for {language_type}:")
+        # Final logging with feature name confirmation
+        logger.info(f"=== Training completed for {language_type} ===")
         for model_info in models_saved:
-            logger.info(f"  Saved: {model_info}")
+            logger.info(f"  ✅ Saved: {model_info}")
         
         logger.info(f"Performance Summary:")
         logger.info(f"  Best model: {best_model.upper()}")
         logger.info(f"  Best F1-score: {best_performance:.4f}")
         logger.info(f"  Dataset size: {analysis['total_samples']} samples")
         logger.info(f"  Features used: {len(trainer.feature_names)}")
+        logger.info(f"  ✅ Feature names saved: YES (CRITICAL FOR INFERENCE)")
+        
+        # Log first and last feature names for verification
+        logger.info(f"  First 5 features: {trainer.feature_names[:5]}")
+        logger.info(f"  Last 5 features: {trainer.feature_names[-5:]}")
+        
+        # Verification message
+        logger.info(f"🔑 CRITICAL: Feature names are now saved in model metadata")
+        logger.info(f"🔑 Backend will use these names to align inference features")
+        logger.info(f"🔑 This should fix the prediction accuracy issues")
         
         return X_test, y_test
         
