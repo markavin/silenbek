@@ -8,16 +8,17 @@ import numpy as np
 import base64
 import logging
 import json
-import mediapipe as mp # MediaPipe Hands solution
-import pickle # For .pkl models
-import joblib # For .joblib models
+import mediapipe as mp
+import pickle
+import joblib
 from pathlib import Path
 from datetime import datetime
 import io
-from PIL import Image # For image decoding
-import pandas as pd # For DataFrame operations
+from PIL import Image
+import pandas as pd
 from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
+import requests
 
 # Fix for Windows console output (if running locally on Windows)
 if sys.platform.startswith('win'):
@@ -27,47 +28,65 @@ if sys.platform.startswith('win'):
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO, # Gunakan INFO untuk production, DEBUG untuk debugging intensif
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler(sys.stdout)]
 )
-logger = logging.getLogger(__name__)  # FIXED: __name__ instead of _name_
+logger = logging.getLogger(__name__)
 
-# Determine project root dynamically for Docker consistency
-# In Docker, WORKDIR /app means this script is at /app/app.py
-current_file_dir = os.path.dirname(os.path.abspath(__file__))  # FIXED: __file__ instead of __file___
+current_file_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = current_file_dir
 
-# Add project root to sys.path if not already there
 if project_root not in sys.path:
     sys.path.append(project_root)
     logger.info(f"Added {project_root} to sys.path")
 
-# Try to import feature_extractor (from src.data_preprocessing)
-# This assumes src/data_preprocessing/feature_extractor.py will be copied to /app/src/data_preprocessing/
 try:
     from src.data_preprocessing.feature_extractor import extract_features
     extract_features_available = True
     logger.info("Feature extractor imported successfully from src.data_preprocessing")
 except ImportError as e:
     extract_features_available = False
-    logger.error(f"❌ Feature extractor not available: {e}. Please ensure src/data_preprocessing/feature_extractor.py is present.")
+    logger.error(f"❌ Feature extractor not available: {e}.")
 
-app = Flask(__name__)  # FIXED: __name__ instead of _name_
+app = Flask(__name__)
 
-# Environment variables for deployment
 HOST = os.environ.get('HOST', '0.0.0.0')
 PORT = int(os.environ.get('PORT', 5000))
 
-# CORS configuration
-# --- PENTING: Untuk production, ganti "*" dengan URL frontend Vercel Anda ---
-# Contoh: os.environ.get('FRONTEND_URL', 'http://localhost:5173')
-CORS_ORIGINS = os.environ.get('FRONTEND_URL', '*').split(',') # Mendukung multiple origins dipisahkan koma
+CORS_ORIGINS = os.environ.get('FRONTEND_URL', '*').split(',')
 CORS_RESOURCES = {r"/*": {"origins": CORS_ORIGINS}}
-
 CORS(app, resources=CORS_RESOURCES, methods=['GET', 'POST', 'OPTIONS'], allow_headers=['Content-Type', 'Authorization', 'User-Agent'])
 logger.info(f"🔓 CORS configured for origins: {CORS_ORIGINS}")
 
+# NEW: Download model files from Google Drive
+
+def download_model_files():
+    model_urls = {
+        "data/models/sign_language_model_bisindo_sklearn.pkl": "https://drive.google.com/uc?export=download&id=1M23kjMfurgOJPOAYoSFObAjmXAi3ckqR",
+        "data/models/sign_language_model_bisindo_tensorflow_meta.pkl": "https://drive.google.com/uc?export=download&id=1augLP24wzL-TYewaQQePUzhMgrUyxlmN",
+        "data/models/sign_language_model_bisindo_tensorflow.h5": "https://drive.google.com/uc?export=download&id=1hS_27-0oprjLFIxOFFLKt2CVdYDfdJDV",
+        "data/models/sign_language_model_bisindo.pkl": "https://drive.google.com/uc?export=download&id=1BZwJ92gT-3EkGT0ZEDEXvXIn0FDcg_Z0",
+
+        "data/models/sign_language_model_sibi_sklearn.pkl": "https://drive.google.com/uc?export=download&id=12XNi2oH59KwMs915pBJHEMrpHIr3ykHw",
+        "data/models/sign_language_model_sibi_tensorflow_meta.pkl": "https://drive.google.com/uc?export=download&id=1G0vEMqU9lTL0Ks9FC0x2edDvqN3MQREs",
+        "data/models/sign_language_model_sibi_tensorflow.h5": "https://drive.google.com/uc?export=download&id=1J8ZR19ejQOXgPab-6zw4tIHL0GHlz-nJ",
+        "data/models/sign_language_model_sibi.pkl": "https://drive.google.com/uc?export=download&id=1pJ9-2ucfd7hUw6PSJV9xWwZ1zLwEstK1"
+    }
+
+    for local_path, url in model_urls.items():
+        if not os.path.exists(local_path):
+            logger.info(f"📥 Downloading model file to {local_path}")
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            try:
+                response = requests.get(url)
+                with open(local_path, 'wb') as f:
+                    f.write(response.content)
+            except Exception as e:
+                logger.error(f"❌ Failed to download {url}: {e}")
+
+# Run download before initializing the API
+download_model_files()
 
 class EnhancedSignLanguageAPI:
     def __init__(self): 
