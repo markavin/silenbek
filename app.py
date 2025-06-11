@@ -95,16 +95,17 @@ logger.info(f"🔓 CORS configured for Vercel domains: {CORS_ORIGINS}")
 
 def download_model_files():
     model_urls = {
-        "data/models/sign_language_model_bisindo_sklearn.pkl": "https://drive.google.com/uc?export=download&id=1GbkAytkTb4gEbjL7NnTKTDCWwT4z10Vr",
-        "data/models/sign_language_model_bisindo_tensorflow_meta.pkl": "https://drive.google.com/uc?export=download&id=1dckHPCKeXXGwPhZxxtqllb_VOpgF6Dnl",
-        "data/models/sign_language_model_bisindo_tensorflow.h5": "https://drive.google.com/uc?export=download&id=1hS_27-0oprjLFIxOFFLKt2CVdYDfdJDV",
-        "data/models/sign_language_model_bisindo.pkl": "https://drive.google.com/uc?export=download&id=1BZwJ92gT-3EkGT0ZEDEXvXIn0FDcg_Z0",
-
-        "data/models/sign_language_model_sibi_sklearn.pkl": "https://drive.google.com/uc?export=download&id=12XNi2oH59KwMs915pBJHEMrpHIr3ykHw",
-        "data/models/sign_language_model_sibi_tensorflow_meta.pkl": "https://drive.google.com/uc?export=download&id=1G0vEMqU9lTL0Ks9FC0x2edDvqN3MQREs",
-        "data/models/sign_language_model_sibi_tensorflow.h5": "https://drive.google.com/uc?export=download&id=1J8ZR19ejQOXgPab-6zw4tIHL0GHlz-nJ",
-        "data/models/sign_language_model_sibi.pkl": "https://drive.google.com/uc?export=download&id=1pJ9-2ucfd7hUw6PSJV9xWwZ1zLwEstK1"
+        "data/models/sign_language_model_sibi.pkl": "https://drive.google.com/uc?export=download&id=1SvwVzt2InHNClNHN4vJkSRMtqiL3lTHC",
+        "data/models/sign_language_model_sibi_tensorflow.h5": "https://drive.google.com/uc?export=download&id=1qcZv3nxeT9Xi1TuCBdFp4f8Yw7jh4kYo",
+        "data/models/sign_language_model_sibi_tensorflow_meta.pkl": "https://drive.google.com/uc?export=download&id=1FS3kLBxmMOZ_eEAtsCLvLWBL5vVXMNSy",
+        "data/models/sign_language_model_sibi_sklearn.pkl": "https://drive.google.com/uc?export=download&id=1izICIkWIgt9ZFIjcNvvfNdeyksdwu-uy",
+    
+        "data/models/sign_language_model_bisindo.pkl": "https://drive.google.com/uc?export=download&id=1h3y3fTJEGWyhULEipYJXTK8R2ioKII3N",
+        "data/models/sign_language_model_bisindo_tensorflow.h5": "https://drive.google.com/uc?export=download&id=11dTcJL3GzFoAskOlhblFmETrX7Pk4iw0",
+        "data/models/sign_language_model_bisindo_tensorflow_meta.pkl": "https://drive.google.com/uc?export=download&id=1wX1pp_h8jc8IJFC4_kUmcLyy6IhZGPy8",
+        "data/models/sign_language_model_bisindo_sklearn.pkl": "https://drive.google.com/uc?export=download&id=1GTIDqbuukwmC4iNBGWM569_K1PZNXdH3"
     }
+
 
     for local_path, url in model_urls.items():
         if not os.path.exists(local_path):
