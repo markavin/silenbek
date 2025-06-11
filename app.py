@@ -54,10 +54,42 @@ app = Flask(__name__)
 HOST = os.environ.get('HOST', '0.0.0.0')
 PORT = int(os.environ.get('PORT', 5000))
 
-CORS_ORIGINS = os.environ.get('FRONTEND_URL', '*').split(',')
-CORS_RESOURCES = {r"/*": {"origins": CORS_ORIGINS}}
-CORS(app, resources=CORS_RESOURCES, methods=['GET', 'POST', 'OPTIONS'], allow_headers=['Content-Type', 'Authorization', 'User-Agent'])
-logger.info(f"🔓 CORS configured for origins: {CORS_ORIGINS}")
+# CORS configuration untuk semua domain Vercel
+FRONTEND_URLS = [
+    'https://silent-sign.vercel.app',                                        # Domain utama
+    'https://silent-signl-98enzfuwh-mark-alvins-projects-95223802.vercel.app', # Domain deployment                                   
+    'https://*.vercel.app',                                                   # Wildcard untuk semua subdomain Vercel
+    'http://localhost:3000',                                                  # Local development
+    'http://localhost:5173',                                                  # Vite dev server
+    'http://127.0.0.1:3000',                                                  # Local testing
+    'https://localhost:3000'                                                  # HTTPS local
+]
+
+# Environment variable override dengan fallback ke list
+CORS_ORIGINS = os.environ.get('FRONTEND_URL', ','.join(FRONTEND_URLS)).split(',')
+
+# Enhanced CORS configuration
+CORS_RESOURCES = {
+    r"/*": {
+        "origins": CORS_ORIGINS,
+        "methods": ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        "allow_headers": [
+            'Content-Type', 
+            'Authorization', 
+            'User-Agent',
+            'Accept',
+            'Origin',
+            'X-Requested-With'
+        ],
+        "supports_credentials": False,
+        "max_age": 600  # Cache preflight for 10 minutes
+    }
+}
+
+CORS(app, resources=CORS_RESOURCES, methods=['GET', 'POST', 'OPTIONS'], 
+     allow_headers=['Content-Type', 'Authorization', 'User-Agent', 'Accept', 'Origin', 'X-Requested-With'])
+
+logger.info(f"🔓 CORS configured for Vercel domains: {CORS_ORIGINS}")
 
 # NEW: Download model files from Google Drive with validation
 
@@ -884,7 +916,41 @@ def list_models():
             "status": "error",
             "message": "Model registry not found."
         }), 500
+# Add explicit preflight handling untuk Vercel
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add('Access-Control-Allow-Headers', "*")
+        response.headers.add('Access-Control-Allow-Methods', "*")
+        return response
 
+# Add CORS headers to all responses untuk Vercel
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    if origin:
+        # Check if origin matches any of our allowed origins (including wildcards)
+        allowed = False
+        for allowed_origin in CORS_ORIGINS:
+            if allowed_origin == '*' or origin == allowed_origin or \
+               (allowed_origin.startswith('https://*.') and origin.endswith(allowed_origin[8:])):
+                allowed = True
+                break
+        
+        if allowed:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+        else:
+            response.headers.add('Access-Control-Allow-Origin', '*')
+    else:
+        response.headers.add('Access-Control-Allow-Origin', '*')
+    
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,User-Agent,Accept,Origin,X-Requested-With')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'false')
+    return response
+    
 @app.route("/")
 def index():
     return jsonify({
