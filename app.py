@@ -99,13 +99,12 @@ def download_model_files():
         "data/models/sign_language_model_sibi_tensorflow.h5": "https://drive.google.com/uc?export=download&id=1qcZv3nxeT9Xi1TuCBdFp4f8Yw7jh4kYo",
         "data/models/sign_language_model_sibi_tensorflow_meta.pkl": "https://drive.google.com/uc?export=download&id=1FS3kLBxmMOZ_eEAtsCLvLWBL5vVXMNSy",
         "data/models/sign_language_model_sibi_sklearn.pkl": "https://drive.google.com/uc?export=download&id=1izICIkWIgt9ZFIjcNvvfNdeyksdwu-uy",
-    
+
         "data/models/sign_language_model_bisindo.pkl": "https://drive.google.com/uc?export=download&id=1h3y3fTJEGWyhULEipYJXTK8R2ioKII3N",
         "data/models/sign_language_model_bisindo_tensorflow.h5": "https://drive.google.com/uc?export=download&id=11dTcJL3GzFoAskOlhblFmETrX7Pk4iw0",
         "data/models/sign_language_model_bisindo_tensorflow_meta.pkl": "https://drive.google.com/uc?export=download&id=1wX1pp_h8jc8IJFC4_kUmcLyy6IhZGPy8",
         "data/models/sign_language_model_bisindo_sklearn.pkl": "https://drive.google.com/uc?export=download&id=1GTIDqbuukwmC4iNBGWM569_K1PZNXdH3"
     }
-
 
     for local_path, url in model_urls.items():
         if not os.path.exists(local_path):
@@ -117,11 +116,12 @@ def download_model_files():
                 if response.status_code == 200 and 'text/html' not in content_type.lower() and b"<html" not in response.content[:100].lower():
                     with open(local_path, 'wb') as f:
                         f.write(response.content)
-                    logger.info(f"✅ File saved: {local_path}")
+                    logger.info(f"File saved: {local_path}")
                 else:
-                    logger.error(f"❌ Invalid file content for {url}. Content-Type: {content_type}. File not saved.")
+                    logger.error(f"Invalid file content for {url}. Content-Type: {content_type}. File not saved.")
             except Exception as e:
-                logger.error(f"❌ Failed to download {url}: {e}")
+                logger.error(f"Failed to download {url}: {e}")
+
 
 # Run download before initializing the API
 download_model_files()
