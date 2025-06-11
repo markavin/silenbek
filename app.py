@@ -602,11 +602,16 @@ class EnhancedSignLanguageAPI:
                 expected_cols = set(feature_names)
 
                 # Add missing columns
-                for feature in expected_cols - current_cols:
-                    features_df[feature] = 0.0
-                # Drop extra columns
-                for feature in current_cols - expected_cols:
-                    features_df = features_df.drop(columns=[feature])
+                missing = expected_cols - current_cols
+                if missing:
+                    zeros_df = pd.DataFrame([{col: 0.0 for col in missing}])
+                    features_df = pd.concat([features_df, zeros_df[missing]], axis=1)
+                
+                # Hapus extra columns
+                extra = current_cols - expected_cols
+                if extra:
+                    features_df = features_df.drop(columns=list(extra))
+
 
                 features_df = features_df[feature_names] # Ensure order is correct
                 logger.info(f"Sklearn features aligned to expected {len(feature_names)} features.")
@@ -661,10 +666,13 @@ class EnhancedSignLanguageAPI:
             if feature_names:
                 current_cols = set(features_df.columns)
                 expected_cols = set(feature_names)
-                for feature in expected_cols - current_cols:
-                    features_df[feature] = 0.0
-                for feature in current_cols - expected_cols:
-                    features_df = features_df.drop(columns=[feature])
+                missing = expected_cols - current_cols
+                if missing:
+                    zeros_df = pd.DataFrame([{col: 0.0 for col in missing}])
+                    features_df = pd.concat([features_df, zeros_df[missing]], axis=1)
+                extra = current_cols - expected_cols
+                if extra:
+                    features_df = features_df.drop(columns=list(extra))
                 features_df = features_df[feature_names]
                 logger.info(f"TensorFlow features aligned to expected {len(feature_names)} features.")
             else:
