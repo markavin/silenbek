@@ -80,10 +80,15 @@ def download_model_files():
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
             try:
                 response = requests.get(url)
-                with open(local_path, 'wb') as f:
-                    f.write(response.content)
+                content_type = response.headers.get('Content-Type', '')
+                if response.status_code == 200 and 'text/html' not in content_type:
+                    with open(local_path, 'wb') as f:
+                        f.write(response.content)
+                    logger.info(f"✅ File saved: {local_path}")
+                else:
+                    logger.error(f"❌ Failed to download valid file from {url} - Received content type: {content_type}")
             except Exception as e:
-                logger.error(f"❌ Failed to download {url}: {e}")
+                logger.error(f"❌ Exception downloading {url}: {e}")
 
 # Run download before initializing the API
 download_model_files()
