@@ -930,26 +930,22 @@ def handle_preflight():
 @app.after_request
 def after_request(response):
     origin = request.headers.get('Origin')
-    if origin:
-        # Check if origin matches any of our allowed origins (including wildcards)
-        allowed = False
-        for allowed_origin in CORS_ORIGINS:
-            if allowed_origin == '*' or origin == allowed_origin or \
-               (allowed_origin.startswith('https://*.') and origin.endswith(allowed_origin[8:])):
-                allowed = True
-                break
-        
-        if allowed:
-            response.headers.add('Access-Control-Allow-Origin', origin)
-        else:
-            response.headers.add('Access-Control-Allow-Origin', '*')
-    else:
-        response.headers.add('Access-Control-Allow-Origin', '*')
     
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,User-Agent,Accept,Origin,X-Requested-With')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'false')
+    if origin:
+        for allowed_origin in CORS_ORIGINS:
+            if (
+                allowed_origin == '*' or
+                origin == allowed_origin or
+                (allowed_origin.startswith('https://*.') and origin.endswith(allowed_origin[8:]))
+            ):
+                response.headers['Access-Control-Allow-Origin'] = origin
+                break
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,User-Agent,Accept,Origin,X-Requested-With'
+    response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
+    response.headers['Access-Control-Allow-Credentials'] = 'false'
+    
     return response
+
     
 @app.route("/")
 def index():
