@@ -59,7 +59,7 @@ CORS_RESOURCES = {r"/*": {"origins": CORS_ORIGINS}}
 CORS(app, resources=CORS_RESOURCES, methods=['GET', 'POST', 'OPTIONS'], allow_headers=['Content-Type', 'Authorization', 'User-Agent'])
 logger.info(f"🔓 CORS configured for origins: {CORS_ORIGINS}")
 
-# NEW: Download model files from Google Drive
+# NEW: Download model files from Google Drive with validation
 
 def download_model_files():
     model_urls = {
@@ -81,14 +81,14 @@ def download_model_files():
             try:
                 response = requests.get(url)
                 content_type = response.headers.get('Content-Type', '')
-                if response.status_code == 200 and 'text/html' not in content_type:
+                if response.status_code == 200 and 'text/html' not in content_type.lower() and b"<html" not in response.content[:100].lower():
                     with open(local_path, 'wb') as f:
                         f.write(response.content)
                     logger.info(f"✅ File saved: {local_path}")
                 else:
-                    logger.error(f"❌ Failed to download valid file from {url} - Received content type: {content_type}")
+                    logger.error(f"❌ Invalid file content for {url}. Content-Type: {content_type}. File not saved.")
             except Exception as e:
-                logger.error(f"❌ Exception downloading {url}: {e}")
+                logger.error(f"❌ Failed to download {url}: {e}")
 
 # Run download before initializing the API
 download_model_files()
