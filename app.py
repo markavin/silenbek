@@ -63,8 +63,8 @@ logger.info(f"🔓 CORS configured for origins: {CORS_ORIGINS}")
 
 def download_model_files():
     model_urls = {
-        "data/models/sign_language_model_bisindo_sklearn.pkl": "https://drive.google.com/uc?export=download&id=1M23kjMfurgOJPOAYoSFObAjmXAi3ckqR",
-        "data/models/sign_language_model_bisindo_tensorflow_meta.pkl": "https://drive.google.com/uc?export=download&id=1augLP24wzL-TYewaQQePUzhMgrUyxlmN",
+        "data/models/sign_language_model_bisindo_sklearn.pkl": "https://drive.google.com/uc?export=download&id=1Id6SfPGbsDTbM720zrKLhNgxoXDPyQZg",
+        "data/models/sign_language_model_bisindo_tensorflow_meta.pkl": "https://drive.google.com/uc?export=download&id=1dckHPCKeXXGwPhZxxtqllb_VOpgF6Dnl",
         "data/models/sign_language_model_bisindo_tensorflow.h5": "https://drive.google.com/uc?export=download&id=1hS_27-0oprjLFIxOFFLKt2CVdYDfdJDV",
         "data/models/sign_language_model_bisindo.pkl": "https://drive.google.com/uc?export=download&id=1BZwJ92gT-3EkGT0ZEDEXvXIn0FDcg_Z0",
 
