@@ -56,9 +56,9 @@ PORT = int(os.environ.get('PORT', 5000))
 
 # CORS configuration untuk semua domain Vercel
 FRONTEND_URLS = [
-    'https://silent-sign.vercel.app',                                        # Domain utama
-    'https://silent-signl-98enzfuwh-mark-alvins-projects-95223802.vercel.app', # Domain deployment                                   
-    'https://*.vercel.app',                                                   # Wildcard untuk semua subdomain Vercel
+    'https://silent-sign.vercel.app',
+    'https://silent-signl-git-main-mark-alvins-projects-95223802.vercel.app',
+    'https://silent-signl-909xcu2ah-mark-alvins-projects-95223802.vercel.app',                                                  
     'http://localhost:3000',                                                  # Local development
     'http://localhost:5173',                                                  # Vite dev server
     'http://127.0.0.1:3000',                                                  # Local testing
