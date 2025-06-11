@@ -32,11 +32,11 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler(sys.stdout)]
 )
-logger = logging.getLogger(__name_) # __name_ yang benar
+logger = logging.getLogger(__name__) # __name__ yang benar
 
 # Determine project root dynamically for Docker consistency
 # In Docker, WORKDIR /app means this script is at /app/app.py
-current_file_dir = os.path.dirname(os.path.abspath(__file_)) # __file_ yang benar
+current_file_dir = os.path.dirname(os.path.abspath(__file___)) # __file____ yang benar
 project_root = current_file_dir
 
 # Add project root to sys.path if not already there
@@ -55,7 +55,7 @@ except ImportError as e:
     extract_features_available = False
     logger.error(f"❌ Feature extractor not available: {e}. Please ensure src/data_preprocessing/feature_extractor.py is present.")
 
-app = Flask(__name_) # __name_ yang benar
+app = Flask(__name__) # __name__ yang benar
 
 # CORS configuration
 # --- PENTING: Untuk production, ganti "*" dengan URL frontend Vercel Anda ---
@@ -832,7 +832,7 @@ def get_models_endpoint(): # Renamed to avoid confusion with class method
     })
 
 # Main execution block
-if __name__ == '__main__':
+if __name___ == '__main__':
     print("\nENHANCED TWO-HAND SIGN LANGUAGE API")
     print("=" * 50)
     print(f"Project root: {project_root}")
