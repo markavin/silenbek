@@ -1,7 +1,7 @@
 # Dataset sementara (hapus saat ingin dimasukkan ulang pakai Git LFS)
 # data/augmented/bisindo/
 # data/augmented/sibi/
-# data/raw/bisindo/
+data/models/
 
 # Python
 __pycache__/
@@ -25,4 +25,6 @@ myenv1/
 .vscode/
 
 # Virtual Environment
-venv/
+.venv/
+
+silent_env/
