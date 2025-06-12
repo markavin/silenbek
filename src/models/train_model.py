@@ -568,23 +568,23 @@ def train_model(dataframe, model_save_base_name, language_type):
         # Final logging with feature name confirmation
         logger.info(f"=== Training completed for {language_type} ===")
         for model_info in models_saved:
-            logger.info(f"  ✅ Saved: {model_info}")
+            logger.info(f" Saved: {model_info}")
         
         logger.info(f"Performance Summary:")
         logger.info(f"  Best model: {best_model.upper()}")
         logger.info(f"  Best F1-score: {best_performance:.4f}")
         logger.info(f"  Dataset size: {analysis['total_samples']} samples")
         logger.info(f"  Features used: {len(trainer.feature_names)}")
-        logger.info(f"  ✅ Feature names saved: YES (CRITICAL FOR INFERENCE)")
+        logger.info(f"  Feature names saved: YES (CRITICAL FOR INFERENCE)")
         
         # Log first and last feature names for verification
         logger.info(f"  First 5 features: {trainer.feature_names[:5]}")
         logger.info(f"  Last 5 features: {trainer.feature_names[-5:]}")
         
         # Verification message
-        logger.info(f"🔑 CRITICAL: Feature names are now saved in model metadata")
-        logger.info(f"🔑 Backend will use these names to align inference features")
-        logger.info(f"🔑 This should fix the prediction accuracy issues")
+        logger.info(f"CRITICAL: Feature names are now saved in model metadata")
+        logger.info(f"Backend will use these names to align inference features")
+        logger.info(f"This should fix the prediction accuracy issues")
         
         return X_test, y_test
         
