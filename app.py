@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# app.py - FIXED VERSION - Clean Model Loading & Prediction
+# app.py - FIXED VERSION - Identical preprocessing as camera_test.py
 
 import os
 import sys
@@ -97,7 +97,7 @@ def download_model_files():
         "data/models/sign_language_model_sibi_tensorflow.h5": "https://drive.google.com/uc?export=download&id=1hvUYvyLNvCOueufW2IqL3BCxcLT1rk27",
         "data/models/sign_language_model_sibi.pkl": "https://drive.google.com/uc?export=download&id=1iB8LGBd875MfP6aScSPtERq9cH7ZR2pj"
     }
-    
+
     for local_path, url in model_urls.items():
         if not os.path.exists(local_path):
             logger.info(f"Downloading model file to {local_path}")
@@ -121,13 +121,13 @@ class FixedSignLanguageAPI:
         self.models = {}
         self.project_root = project_root
         
-        # MediaPipe setup
+        # MediaPipe setup - IDENTICAL to camera_test.py
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(
-            static_image_mode=True,
+            static_image_mode=False,
             max_num_hands=2,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.4
+            min_detection_confidence=0.7,
+            min_tracking_confidence=0.5
         )
         
         self.load_models()
@@ -183,7 +183,7 @@ class FixedSignLanguageAPI:
                     tf_model = tf.keras.models.load_model(
                         str(config['tensorflow_path']),
                         custom_objects=None,
-                        compile=False  # Skip compilation to avoid compatibility issues
+                        compile=False
                     )
                     
                     # Recompile with current TensorFlow version
@@ -207,7 +207,6 @@ class FixedSignLanguageAPI:
                     logger.warning(f"{config['name']}: TensorFlow not available")
                 except Exception as e:
                     logger.warning(f"{config['name']}: TensorFlow load failed - {e}")
-                    # Try loading with different compatibility options
                     try:
                         import tensorflow.compat.v1 as tf_v1
                         tf_v1.disable_v2_behavior()
@@ -248,7 +247,6 @@ class FixedSignLanguageAPI:
                 logger.error(f"{language} TensorFlow model has unexpected input shape: {input_shape}")
                 return False
 
-            # Test prediction with error handling
             try:
                 pred_prob = model.predict(test_data, verbose=0)
                 logger.info(f"{language} TensorFlow validation passed. Output shape: {pred_prob.shape}")
@@ -262,7 +260,7 @@ class FixedSignLanguageAPI:
             return False
     
     def extract_landmarks_from_frame(self, image_bgr, mirror_mode=None):
-        """Extract landmarks with proper error handling"""
+        """Extract landmarks - IDENTICAL to camera_test.py"""
         try:
             # Convert to RGB
             image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
@@ -278,23 +276,10 @@ class FixedSignLanguageAPI:
             hand_data = []
             
             # Process detected hands
-            for i, (hand_landmarks, handedness) in enumerate(zip(results.multi_hand_landmarks, results.multi_handedness)):
-                hand_label = handedness.classification[0].label
-                hand_score = handedness.classification[0].score
+            for i, hand_landmarks in enumerate(results.multi_hand_landmarks):
                 wrist_x = hand_landmarks.landmark[0].x
-                
-                # Adjust handedness based on mirror mode
-                if mirror_mode is True:
-                    adjusted_label = "Left" if hand_label == "Right" else "Right"
-                elif mirror_mode is False:
-                    adjusted_label = hand_label
-                else:
-                    adjusted_label = hand_label
-                
                 hand_data.append({
                     'landmarks': hand_landmarks,
-                    'adjusted_label': adjusted_label,
-                    'score': hand_score,
                     'wrist_x': wrist_x,
                     'index': i
                 })
@@ -302,11 +287,9 @@ class FixedSignLanguageAPI:
             num_hands = len(hand_data)
             logger.debug(f"Detected {num_hands} hands")
             
-            # Sort hands
+            # Sort hands by position (left to right)
             if num_hands >= 2:
                 hand_data.sort(key=lambda x: x['wrist_x'])
-            else:
-                hand_data.sort(key=lambda x: -x['score'])
             
             # Extract landmarks for up to 2 hands
             for hand_idx in range(2):
@@ -332,6 +315,99 @@ class FixedSignLanguageAPI:
         except Exception as e:
             logger.error(f"Landmark extraction error: {e}")
             return None
+    
+    def extract_features_from_landmarks(self, landmarks_data):
+        """Extract features - IDENTICAL to camera_test.py"""
+        try:
+            if extract_features is not None:
+                # Use same pipeline as training
+                landmark_cols = [f'landmark_{i}_{coord}' for i in range(42) for coord in ['x', 'y', 'z']]
+                df_landmarks = pd.DataFrame([landmarks_data], columns=landmark_cols)
+                
+                # Extract features without selection (use all features)
+                features_df = extract_features(df_landmarks, perform_selection=False)
+                
+                if not features_df.empty:
+                    # Remove label columns
+                    features_for_prediction = features_df.drop(columns=['label', 'sign_language_type'], errors='ignore')
+                    return features_for_prediction
+            
+            # Fallback: create basic features
+            return self.create_basic_features(landmarks_data)
+            
+        except Exception as e:
+            logger.error(f"Feature extraction error: {e}")
+            return self.create_basic_features(landmarks_data)
+    
+    def create_basic_features(self, landmarks_data):
+        """Create basic features - IDENTICAL to camera_test.py"""
+        try:
+            features = {}
+            
+            # Split into 2 hands
+            hand1_data = landmarks_data[:63]
+            hand2_data = landmarks_data[63:]
+            
+            for hand_idx, hand_data in enumerate([hand1_data, hand2_data]):
+                if len(hand_data) >= 63:
+                    x_coords = hand_data[::3]
+                    y_coords = hand_data[1::3]
+                    z_coords = hand_data[2::3]
+                    
+                    # Basic statistics
+                    features[f'h{hand_idx}_x_mean'] = np.mean(x_coords)
+                    features[f'h{hand_idx}_y_mean'] = np.mean(y_coords)
+                    features[f'h{hand_idx}_z_mean'] = np.mean(z_coords)
+                    features[f'h{hand_idx}_x_std'] = np.std(x_coords)
+                    features[f'h{hand_idx}_y_std'] = np.std(y_coords)
+                    features[f'h{hand_idx}_z_std'] = np.std(z_coords)
+                    
+                    # Distances
+                    wrist_x, wrist_y, wrist_z = x_coords[0], y_coords[0], z_coords[0]
+                    for tip_idx in [4, 8, 12, 16, 20]:  # fingertips
+                        if tip_idx < len(x_coords):
+                            dist = np.sqrt((x_coords[tip_idx] - wrist_x)**2 + 
+                                         (y_coords[tip_idx] - wrist_y)**2 + 
+                                         (z_coords[tip_idx] - wrist_z)**2)
+                            features[f'h{hand_idx}_tip_{tip_idx}_dist'] = dist
+                else:
+                    # Fill with zeros for missing hand
+                    for stat in ['x_mean', 'y_mean', 'z_mean', 'x_std', 'y_std', 'z_std']:
+                        features[f'h{hand_idx}_{stat}'] = 0.0
+                    for tip_idx in [4, 8, 12, 16, 20]:
+                        features[f'h{hand_idx}_tip_{tip_idx}_dist'] = 0.0
+            
+            return pd.DataFrame([features])
+            
+        except Exception as e:
+            logger.error(f"Basic feature creation error: {e}")
+            # Ultimate fallback
+            basic_features = {f'feature_{i}': 0.0 for i in range(50)}
+            return pd.DataFrame([basic_features])
+    
+    def validate_sklearn_model(self, model_data, language):
+        """Validate sklearn model"""
+        try:
+            model = model_data.get('model')
+            if model is None:
+                return False
+            
+            # Get expected features
+            n_features = getattr(model, 'n_features_in_', None)
+            if n_features is None:
+                if 'feature_names' in model_data:
+                    n_features = len(model_data['feature_names'])
+                else:
+                    n_features = 126
+            
+            # Test prediction
+            test_data = np.random.rand(1, n_features).astype(np.float32) * 0.1
+            pred = model.predict(test_data)[0]
+            logger.info(f"{language} sklearn validation passed: {pred}")
+            return True
+        except Exception as e:
+            logger.error(f"{language} sklearn validation failed: {e}")
+            return False
     
     def align_features_to_model(self, features_df, expected_feature_names, model_name):
         """Align input features to match model's expected feature order"""
@@ -361,162 +437,11 @@ class FixedSignLanguageAPI:
             
             logger.info(f"{model_name}: Features aligned - {len(expected_feature_names)} features in correct order")
             
-            # Debug: Log first few feature values
-            logger.debug(f"{model_name}: First 5 features: {dict(list(features_df.iloc[0].head().items()))}")
-            
             return features_df
             
         except Exception as e:
             logger.error(f"{model_name}: Feature alignment failed - {e}")
             return features_df
-        """Create features from landmarks with proper structure"""
-        try:
-            features = {}
-            
-            # Split into two hands
-            hand1_data = landmarks_data[:63]
-            hand2_data = landmarks_data[63:]
-            
-            feature_idx = 0
-            
-            for hand_idx, hand_data in enumerate([hand1_data, hand2_data]):
-                if len(hand_data) >= 63:
-                    x_coords = hand_data[::3]
-                    y_coords = hand_data[1::3]
-                    z_coords = hand_data[2::3]
-                    
-                    # Check if hand exists
-                    hand_exists = not all(x == 0 and y == 0 for x, y in zip(x_coords, y_coords))
-                    
-                    if hand_exists:
-                        # Basic statistics
-                        stats = [
-                            np.mean(x_coords), np.std(x_coords), np.min(x_coords), np.max(x_coords),
-                            np.mean(y_coords), np.std(y_coords), np.min(y_coords), np.max(y_coords),
-                            np.mean(z_coords), np.std(z_coords), np.min(z_coords), np.max(z_coords),
-                        ]
-                        
-                        for stat in stats:
-                            features[f'feature_{feature_idx}'] = float(stat) if np.isfinite(stat) else 0.0
-                            feature_idx += 1
-                        
-                        # Distances from wrist to fingertips
-                        wrist_x, wrist_y, wrist_z = x_coords[0], y_coords[0], z_coords[0]
-                        fingertip_indices = [4, 8, 12, 16, 20]
-                        
-                        for tip_idx in fingertip_indices:
-                            if tip_idx < len(x_coords):
-                                dist = np.sqrt((x_coords[tip_idx] - wrist_x)**2 + 
-                                             (y_coords[tip_idx] - wrist_y)**2 + 
-                                             (z_coords[tip_idx] - wrist_z)**2)
-                                features[f'feature_{feature_idx}'] = float(dist) if np.isfinite(dist) else 0.0
-                                feature_idx += 1
-                        
-                        # Hand geometry
-                        width = max(x_coords) - min(x_coords)
-                        height = max(y_coords) - min(y_coords)
-                        features[f'feature_{feature_idx}'] = float(width) if np.isfinite(width) else 0.0
-                        feature_idx += 1
-                        features[f'feature_{feature_idx}'] = float(height) if np.isfinite(height) else 0.0
-                        feature_idx += 1
-                    else:
-                        # Fill zeros for missing hand
-                        for _ in range(19):  # 12 stats + 5 distances + 2 geometry
-                            features[f'feature_{feature_idx}'] = 0.0
-                            feature_idx += 1
-                else:
-                    # Hand data incomplete
-                    for _ in range(19):
-                        features[f'feature_{feature_idx}'] = 0.0
-                        feature_idx += 1
-            
-            # Two-hand interaction features
-            if len(hand1_data) >= 63 and len(hand2_data) >= 63:
-                hand1_exists = not all(x == 0 and y == 0 for x, y in zip(hand1_data[::3], hand1_data[1::3]))
-                hand2_exists = not all(x == 0 and y == 0 for x, y in zip(hand2_data[::3], hand2_data[1::3]))
-                
-                if hand1_exists and hand2_exists:
-                    wrist1_x, wrist1_y = hand1_data[0], hand1_data[1]
-                    wrist2_x, wrist2_y = hand2_data[0], hand2_data[1]
-                    
-                    inter_wrist_dist = np.sqrt((wrist1_x - wrist2_x)**2 + (wrist1_y - wrist2_y)**2)
-                    features[f'feature_{feature_idx}'] = float(inter_wrist_dist) if np.isfinite(inter_wrist_dist) else 0.0
-                    feature_idx += 1
-                    
-                    features[f'feature_{feature_idx}'] = float(wrist1_x - wrist2_x) if np.isfinite(wrist1_x - wrist2_x) else 0.0
-                    feature_idx += 1
-                    features[f'feature_{feature_idx}'] = float(wrist1_y - wrist2_y) if np.isfinite(wrist1_y - wrist2_y) else 0.0
-                    feature_idx += 1
-                else:
-                    for _ in range(3):
-                        features[f'feature_{feature_idx}'] = 0.0
-                        feature_idx += 1
-            else:
-                for _ in range(3):
-                    features[f'feature_{feature_idx}'] = 0.0
-                    feature_idx += 1
-            
-            # Pad to minimum expected features
-            while feature_idx < 80:
-                features[f'feature_{feature_idx}'] = 0.0
-                feature_idx += 1
-            
-            return pd.DataFrame([features])
-            
-        except Exception as e:
-            logger.error(f"Feature creation failed: {e}")
-            basic_features = {f'feature_{i}': 0.0 for i in range(80)}
-            return pd.DataFrame([basic_features])
-    
-    def validate_sklearn_model(self, model_data, language):
-        """Validate sklearn model"""
-        try:
-            model = model_data.get('model')
-            if model is None:
-                return False
-            
-            # Get expected features
-            n_features = getattr(model, 'n_features_in_', None)
-            if n_features is None:
-                if 'feature_names' in model_data:
-                    n_features = len(model_data['feature_names'])
-                else:
-                    n_features = 126
-            
-            # Test prediction
-            test_data = np.random.rand(1, n_features).astype(np.float32) * 0.1
-            pred = model.predict(test_data)[0]
-            logger.info(f"{language} sklearn validation passed: {pred}")
-            return True
-        except Exception as e:
-            logger.error(f"{language} sklearn validation failed: {e}")
-            return False
-    
-    def validate_tensorflow_model(self, model, meta, language):
-        """Validate TensorFlow model with compatibility fixes"""
-        try:
-            input_shape = model.input_shape[1:]
-            
-            if len(input_shape) == 1:
-                test_data = np.random.rand(1, input_shape[0]).astype(np.float32) * 0.1
-            elif len(input_shape) == 3:
-                test_data = np.random.rand(1, input_shape[0], input_shape[1], input_shape[2]).astype(np.float32) * 0.1
-            else:
-                logger.error(f"{language} TensorFlow model has unexpected input shape: {input_shape}")
-                return False
-
-            # Test prediction with error handling
-            try:
-                pred_prob = model.predict(test_data, verbose=0)
-                logger.info(f"{language} TensorFlow validation passed. Output shape: {pred_prob.shape}")
-                return True
-            except Exception as pred_error:
-                logger.error(f"{language} TensorFlow prediction test failed: {pred_error}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"{language} TensorFlow validation failed: {e}")
-            return False
     
     def predict_tensorflow(self, features_df, model, meta):
         """Predict using TensorFlow model with proper feature alignment"""
@@ -574,29 +499,8 @@ class FixedSignLanguageAPI:
             logger.error(f"TensorFlow prediction error: {e}")
             return None, 0.0
     
-    def predict_with_model(self, features_df, language):
-        """Make prediction using best available model"""
-        try:
-            model_info = self.models.get(language.upper())
-            if not model_info:
-                logger.warning(f"No model info for {language.upper()}")
-                return None, 0.0
-            
-            # Try TensorFlow first if available (usually more accurate)
-            if 'tensorflow' in model_info['available_models']:
-                logger.debug(f"Using TensorFlow model for {language.upper()}")
-                return self.predict_tensorflow(features_df, model_info['tensorflow_model'], model_info['tensorflow_meta'])
-            elif 'sklearn' in model_info['available_models']:
-                logger.debug(f"Using sklearn model for {language.upper()}")
-                return self.predict_sklearn(features_df, model_info['sklearn_model'])
-            else:
-                logger.warning(f"No usable models for {language.upper()}")
-                return None, 0.0
-                
-        except Exception as e:
-            logger.error(f"Model prediction dispatch failed for {language}: {e}")
-            return None, 0.0
-        """Predict using sklearn model with proper feature handling"""
+    def predict_sklearn(self, features_df, model_data):
+        """Predict using sklearn model"""
         try:
             model = model_data.get('model')
             scaler = model_data.get('scaler')
@@ -643,7 +547,7 @@ class FixedSignLanguageAPI:
                 elif hasattr(model, 'decision_function'):
                     decision_values = model.decision_function(features_scaled)[0]
                     if isinstance(decision_values, np.ndarray):
-                        confidence = np.max(np.abs(decision_values)) / 10.0  # Normalize
+                        confidence = np.max(np.abs(decision_values)) / 10.0
                     else:
                         confidence = abs(decision_values) / 10.0
                     confidence = min(1.0, max(0.1, confidence))
@@ -656,8 +560,31 @@ class FixedSignLanguageAPI:
             logger.error(f"Sklearn prediction error: {e}")
             return None, 0.0
     
+    def predict_with_model(self, features_df, language):
+        """Make prediction using best available model"""
+        try:
+            model_info = self.models.get(language.upper())
+            if not model_info:
+                logger.warning(f"No model info for {language.upper()}")
+                return None, 0.0
+            
+            # Try TensorFlow first if available (usually more accurate)
+            if 'tensorflow' in model_info['available_models']:
+                logger.debug(f"Using TensorFlow model for {language.upper()}")
+                return self.predict_tensorflow(features_df, model_info['tensorflow_model'], model_info['tensorflow_meta'])
+            elif 'sklearn' in model_info['available_models']:
+                logger.debug(f"Using sklearn model for {language.upper()}")
+                return self.predict_sklearn(features_df, model_info['sklearn_model'])
+            else:
+                logger.warning(f"No usable models for {language.upper()}")
+                return None, 0.0
+                
+        except Exception as e:
+            logger.error(f"Model prediction dispatch failed for {language}: {e}")
+            return None, 0.0
+    
     def predict_sign(self, image_bgr, language_type='bisindo', mirror_mode=None):
-        """Main prediction with fixed feature processing"""
+        """Main prediction function - IDENTICAL preprocessing as camera_test.py"""
         try:
             language_type_upper = language_type.upper()
             logger.info(f"Predicting for {language_type_upper}")
@@ -668,7 +595,7 @@ class FixedSignLanguageAPI:
                 logger.error(error_msg)
                 return "Demo_A", 0.7, error_msg
             
-            # Extract landmarks
+            # Extract landmarks - IDENTICAL to camera_test.py
             landmarks_np = self.extract_landmarks_from_frame(image_bgr, mirror_mode=mirror_mode)
             if landmarks_np is None:
                 logger.warning("Landmark extraction failed")
@@ -678,8 +605,8 @@ class FixedSignLanguageAPI:
                 logger.warning("No hands detected")
                 return "No hand detected", 0.0, "No hands detected"
             
-            # Create features
-            features_df = self.create_features_from_landmarks(landmarks_np)
+            # Extract features - IDENTICAL to camera_test.py
+            features_df = self.extract_features_from_landmarks(landmarks_np)
             
             if features_df.empty:
                 logger.error("Feature creation failed")
@@ -711,7 +638,7 @@ api = FixedSignLanguageAPI()
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Enhanced health check with feature names debugging"""
+    """Health check with comprehensive status"""
     try:
         models_status = {}
         for lang, info in api.models.items():
@@ -719,39 +646,6 @@ def health_check():
                 'sklearn': 'loaded' if 'sklearn_model' in info else 'not_loaded',
                 'tensorflow': 'loaded' if 'tensorflow_model' in info else 'not_loaded',
                 'available_types': info['available_models']
-            }
-            
-            # Add feature names info for debugging
-            if 'sklearn_model' in info:
-                sklearn_feature_names = info['sklearn_model'].get('feature_names', [])
-                models_status[lang]['sklearn_features'] = {
-                    'count': len(sklearn_feature_names) if sklearn_feature_names else 0,
-                    'first_5': sklearn_feature_names[:5] if sklearn_feature_names else [],
-                    'has_feature_names': bool(sklearn_feature_names)
-                }
-            
-            if 'tensorflow_meta' in info:
-                tf_feature_names = info['tensorflow_meta'].get('feature_names', [])
-                models_status[lang]['tensorflow_features'] = {
-                    'count': len(tf_feature_names) if tf_feature_names else 0,
-                    'first_5': tf_feature_names[:5] if tf_feature_names else [],
-                    'has_feature_names': bool(tf_feature_names)
-                }
-
-        # Test feature extraction
-        try:
-            from src.data_preprocessing.feature_extractor import get_expected_feature_names
-            expected_features = get_expected_feature_names()
-            feature_test_result = {
-                'feature_extractor_working': True,
-                'expected_feature_count': len(expected_features),
-                'first_5_expected': expected_features[:5],
-                'last_5_expected': expected_features[-5:]
-            }
-        except Exception as feat_e:
-            feature_test_result = {
-                'feature_extractor_working': False,
-                'error': str(feat_e)
             }
 
         return jsonify({
@@ -761,8 +655,7 @@ def health_check():
             'total_languages_loaded': len(api.models),
             'mediapipe_ready': api.hands is not None,
             'feature_extractor_available': extract_features_available,
-            'feature_test': feature_test_result,
-            'backend_version': '2.0.3-feature-fixed',
+            'backend_version': '2.1.0-fixed-preprocessing',
             'endpoints': {
                 'health': '/api/health',
                 'models': '/api/models', 
@@ -781,7 +674,7 @@ def health_check():
 
 @app.route('/api/translate', methods=['POST'])
 def translate_sign_endpoint():
-    """Fixed translate endpoint"""
+    """Fixed translate endpoint with identical preprocessing"""
     try:
         logger.info("Translate endpoint called")
         
@@ -839,89 +732,9 @@ def translate_sign_endpoint():
         logger.error(f"Endpoint error: {e}")
         return jsonify({'success': False, 'error': str(e), 'prediction': 'Error'}), 500
 
-@app.route('/api/debug/features', methods=['GET'])
-def debug_features():
-    """Debug endpoint to test feature extraction consistency"""
-    try:
-        # Create dummy landmarks for testing
-        dummy_landmarks = np.random.rand(126).astype(np.float32) * 0.5
-        
-        # Test feature creation
-        features_df = api.create_features_from_landmarks(dummy_landmarks)
-        
-        if features_df.empty:
-            return jsonify({
-                'success': False,
-                'error': 'Feature creation failed'
-            })
-        
-        feature_columns = [col for col in features_df.columns 
-                          if col not in ['label', 'sign_language_type', 'is_mirrored', 'image_name']]
-        
-        # Get expected features
-        try:
-            from src.data_preprocessing.feature_extractor import get_expected_feature_names, validate_feature_names_consistency
-            expected_features = get_expected_feature_names()
-            validation_result = validate_feature_names_consistency(features_df)
-        except ImportError:
-            expected_features = []
-            validation_result = {'error': 'Cannot import feature validation'}
-        
-        # Compare with model expectations
-        model_comparisons = {}
-        for lang, model_info in api.models.items():
-            if 'sklearn_model' in model_info:
-                sklearn_features = model_info['sklearn_model'].get('feature_names', [])
-                model_comparisons[f'{lang}_sklearn'] = {
-                    'model_feature_count': len(sklearn_features),
-                    'extracted_feature_count': len(feature_columns),
-                    'feature_match': set(sklearn_features) == set(feature_columns) if sklearn_features else False,
-                    'missing_in_extracted': list(set(sklearn_features) - set(feature_columns)) if sklearn_features else [],
-                    'extra_in_extracted': list(set(feature_columns) - set(sklearn_features)) if sklearn_features else []
-                }
-            
-            if 'tensorflow_meta' in model_info:
-                tf_features = model_info['tensorflow_meta'].get('feature_names', [])
-                model_comparisons[f'{lang}_tensorflow'] = {
-                    'model_feature_count': len(tf_features),
-                    'extracted_feature_count': len(feature_columns),
-                    'feature_match': set(tf_features) == set(feature_columns) if tf_features else False,
-                    'missing_in_extracted': list(set(tf_features) - set(feature_columns)) if tf_features else [],
-                    'extra_in_extracted': list(set(feature_columns) - set(tf_features)) if tf_features else []
-                }
-        
-        return jsonify({
-            'success': True,
-            'extracted_features': {
-                'count': len(feature_columns),
-                'first_10': feature_columns[:10],
-                'last_10': feature_columns[-10:]
-            },
-            'expected_features': {
-                'count': len(expected_features),
-                'first_10': expected_features[:10] if expected_features else [],
-                'last_10': expected_features[-10:] if expected_features else []
-            },
-            'validation_result': validation_result,
-            'model_comparisons': model_comparisons,
-            'recommendations': [
-                "If feature_match is False, models will predict incorrectly",
-                "Missing features should be added with default values",
-                "Extra features should be removed or model retrained",
-                "Feature order must match training exactly"
-            ]
-        })
-        
-    except Exception as e:
-        logger.error(f"Feature debug failed: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        })
-
 @app.route('/api/models', methods=['GET'])
 def get_models_endpoint():
-    """Enhanced models info with feature debugging"""
+    """Models info endpoint"""
     return jsonify({
         'available_models': list(api.models.keys()),
         'total_models': len(api.models),
@@ -932,8 +745,7 @@ def get_models_endpoint():
                 'tensorflow_feature_count': len(info.get('tensorflow_meta', {}).get('feature_names', [])) if 'tensorflow_meta' in info else 0
             } 
             for lang, info in api.models.items()
-        },
-        'debug_endpoint': '/api/debug/features'
+        }
     })
 
 @app.before_request
