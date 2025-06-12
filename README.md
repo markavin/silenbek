@@ -169,4 +169,4 @@ Model dan dataset disimpan di Google Drive dan akan diunduh saat aplikasi berjal
 
 > Pastikan Anda memiliki akses ke folder Google Drive terkait.
 
-Link: **[Google Drive Folder](#)**
+Link: https://drive.google.com/drive/folders/1Rplg09OXI98qblH4o99w9fEfgB8lDd_-?usp=sharing
