@@ -131,7 +131,7 @@ def create_standardized_features(landmarks_data):
                 inter_wrist_dist = np.sqrt((wrist1_x - wrist2_x)**2 + 
                                          (wrist1_y - wrist2_y)**2 + 
                                          (wrist1_z - wrist2_z)**2)
-                features['inter_wrist_dist'] = float(inter_wrist_dist) if np.isfinite(inter_wrist_dist) else 0.0 np.isfinite(inter_wrist_dist) else 0.0
+                features['inter_wrist_dist'] = float(inter_wrist_dist) if np.isfinite(inter_wrist_dist) else 0.0
                 
                 # Relative positions - EXACT naming
                 features['hands_rel_x'] = float(wrist1_x - wrist2_x) if np.isfinite(wrist1_x - wrist2_x) else 0.0
